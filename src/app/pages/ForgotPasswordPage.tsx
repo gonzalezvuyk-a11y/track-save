@@ -30,6 +30,16 @@ export default function ForgotPasswordPage() {
     setLoading(false);
 
     if (error) {
+      const isEmailRateLimit =
+        error.code === 'over_email_send_rate_limit' ||
+        error.message.toLowerCase().includes('rate limit') ||
+        error.message.toLowerCase().includes('email rate');
+
+      if (isEmailRateLimit) {
+        toast.error('Límite de correos alcanzado. Espera unos minutos antes de reenviar.');
+        return;
+      }
+
       toast.error(error.message);
       return;
     }

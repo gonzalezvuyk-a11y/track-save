@@ -49,6 +49,16 @@ export default function RegisterPage() {
 
     if (error) {
       setLoading(false);
+      const isEmailRateLimit =
+        error.code === 'over_email_send_rate_limit' ||
+        error.message.toLowerCase().includes('rate limit') ||
+        error.message.toLowerCase().includes('email rate');
+
+      if (isEmailRateLimit) {
+        toast.error('Límite de correos alcanzado. Espera unos minutos y vuelve a intentar.');
+        return;
+      }
+
       toast.error(error.message);
       return;
     }
