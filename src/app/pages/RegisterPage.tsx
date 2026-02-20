@@ -63,9 +63,16 @@ export default function RegisterPage() {
       });
 
       if (profileError) {
-        setLoading(false);
-        toast.error(profileError.message);
-        return;
+        const missingProfilesTable =
+          profileError.code === '42P01' || profileError.message.toLowerCase().includes('profiles');
+
+        if (!missingProfilesTable) {
+          setLoading(false);
+          toast.error(profileError.message);
+          return;
+        }
+
+        toast.warning('Cuenta creada, pero falta crear la tabla public.profiles en Supabase.');
       }
     }
 
