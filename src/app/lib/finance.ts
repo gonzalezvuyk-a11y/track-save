@@ -38,5 +38,9 @@ export const getTodayLocalDate = () => {
 };
 
 export const getDefaultDateForMonth = (_month: string) => {
-  return getTodayLocalDate();
+  const currentMonth = getCurrentMonth();
+  if (_month === currentMonth) {
+    return getTodayLocalDate();
+  }
+  return `${_month}-01`;
 };
