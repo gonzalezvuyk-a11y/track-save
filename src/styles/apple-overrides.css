@@ -1,0 +1,114 @@
+@layer utilities {
+  /* Apple-style card overrides for existing components */
+  [class*="rounded-2xl"][class*="shadow-sm"] {
+    @apply rounded-3xl shadow-2xl shadow-black/5 backdrop-blur-xl;
+  }
+  
+  [class*="border-neutral-200"],
+  [class*="border-neutral-300"] {
+    @apply border-border/50;
+  }
+  
+  [class*="bg-neutral-50"] {
+    @apply bg-muted/50;
+  }
+  
+  [class*="bg-neutral-100"] {
+    @apply bg-muted;
+  }
+  
+  [class*="text-neutral-900"] {
+    @apply text-foreground;
+  }
+  
+  [class*="text-neutral-500"],
+  [class*="text-neutral-600"] {
+    @apply text-muted-foreground;
+  }
+  
+  [class*="text-neutral-400"] {
+    @apply text-muted-foreground/70;
+  }
+  
+  [class*="bg-white"] {
+    @apply bg-card;
+  }
+  
+  /* Button styling enhancements */
+  button[class*="rounded-lg"] {
+    @apply rounded-xl transition-all;
+  }
+  
+  button[class*="rounded-xl"] {
+    @apply rounded-2xl;
+  }
+  
+  /* Input and select styling */
+  input:not([type="file"]):not([type="radio"]):not([type="checkbox"]) {
+    @apply rounded-xl transition-all;
+  }
+  
+  select, [role="combobox"] {
+    @apply rounded-xl transition-all;
+  }
+  
+  /* Badge enhancements */
+  [data-slot="badge"] {
+    @apply rounded-full;
+  }
+  
+  /* Progress bar styling */
+  [role="progressbar"] {
+    @apply rounded-full;
+  }
+  
+  /* Table styling */
+  table {
+    @apply rounded-2xl overflow-hidden;
+  }
+  
+  /* Smooth transitions */
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+/* Custom scrollbar for dark mode */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Light mode scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
