@@ -49,6 +49,7 @@ interface BudgetRow {
   category: string;
   budget: number;
   description?: string;
+  installmentNumber?: number;
   installments?: number;
   paidAt?: string;
 }
@@ -273,6 +274,25 @@ const getBudgetPaymentDate = (month: string) => {
     return new Date().toISOString().split('T')[0];
   }
   return `${month}-01`;
+};
+
+const normalizeBudgetInstallments = (budget: Omit<BudgetRow, 'id'>): Omit<BudgetRow, 'id'> => {
+  if (!budget.installments || budget.installments < 1) {
+    return {
+      ...budget,
+      installments: undefined,
+      installmentNumber: undefined,
+    };
+  }
+
+  const totalInstallments = Math.trunc(budget.installments);
+  const currentInstallment = budget.installmentNumber ? Math.trunc(budget.installmentNumber) : 1;
+
+  return {
+    ...budget,
+    installments: totalInstallments,
+    installmentNumber: Math.min(Math.max(currentInstallment, 1), totalInstallments),
+  };
 };
 
 // ===== MAIN APP =====
@@ -862,7 +882,7 @@ export default function App() {
 
   const handleAddBudget = (budget: Omit<BudgetRow, 'id'>) => {
     const newBudget: BudgetRow = {
-      ...budget,
+      ...normalizeBudgetInstallments(budget),
       id: crypto.randomUUID(),
     };
     setBudgets([...budgets, newBudget]);
@@ -872,8 +892,9 @@ export default function App() {
   };
 
   const handleUpdateBudget = (id: string, updated: Omit<BudgetRow, 'id'>) => {
+    const normalizedBudget = normalizeBudgetInstallments(updated);
     setBudgets(budgets.map(b => 
-      b.id === id ? { ...updated, id } : b
+      b.id === id ? { ...normalizedBudget, id } : b
     ));
     toast.success('Presupuesto actualizado');
     setIsBudgetModalOpen(false);
@@ -899,12 +920,33 @@ export default function App() {
       return;
     }
     
-    const newBudgets = previousBudgets.map(b => ({
-      ...b,
-      id: crypto.randomUUID(),
-      month: selectedMonth,
-      paidAt: undefined,
-    }));
+    const newBudgets = previousBudgets
+      .filter(b => {
+        if (!b.installments) {
+          return true;
+        }
+        const currentInstallment = b.installmentNumber || 1;
+        return currentInstallment < b.installments;
+      })
+      .map(b => {
+        const currentInstallment = b.installmentNumber || 1;
+        const nextInstallment = b.installments
+          ? Math.min(currentInstallment + 1, b.installments)
+          : undefined;
+
+        return {
+          ...b,
+          id: crypto.randomUUID(),
+          month: selectedMonth,
+          installmentNumber: nextInstallment,
+          paidAt: undefined,
+        };
+      });
+
+    if (newBudgets.length === 0) {
+      toast.info('No hay cuotas pendientes para copiar al nuevo mes');
+      return;
+    }
     
     setBudgets([...budgets, ...newBudgets]);
     toast.success(`${newBudgets.length} presupuestos copiados`);
@@ -923,17 +965,23 @@ export default function App() {
 
     const paymentDate = getBudgetPaymentDate(budgetRow.month);
     const description = budgetRow.description?.trim() || budgetRow.category;
+    const installmentLabel =
+      budgetRow.installments && budgetRow.installmentNumber
+        ? `Cuota ${budgetRow.installmentNumber} de ${budgetRow.installments}`
+        : null;
 
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
       date: paymentDate,
-      description: `Pago presupuesto: ${description}`,
+      description: installmentLabel
+        ? `Pago presupuesto: ${description} (${installmentLabel})`
+        : `Pago presupuesto: ${description}`,
       category: budgetRow.category,
       type: 'Expense',
       account: 'Bank',
       amount: budgetRow.budget,
       tags: ['Presupuesto'],
-      notes: budgetRow.installments ? `Pago en ${budgetRow.installments} cuotas` : '',
+      notes: installmentLabel || '',
     };
 
     setTransactions(prev => [...prev, newTransaction]);
@@ -2084,7 +2132,9 @@ export default function App() {
                             <div className="space-y-1">
                               <div>{stat.category}</div>
                               {stat.installments ? (
-                                <div className="text-xs text-neutral-500">{stat.installments} cuotas</div>
+                                <div className="text-xs text-neutral-500">
+                                  Cuota {stat.installmentNumber || 1} de {stat.installments}
+                                </div>
                               ) : null}
                             </div>
                           </TableCell>
@@ -2642,6 +2692,7 @@ function BudgetModal({
     category: '',
     budget: 0,
     description: '',
+    installmentNumber: undefined,
     installments: undefined,
     paidAt: undefined,
   });
@@ -2655,6 +2706,7 @@ function BudgetModal({
         category: '',
         budget: 0,
         description: '',
+        installmentNumber: undefined,
         installments: undefined,
         paidAt: undefined,
       });
@@ -2717,6 +2769,23 @@ function BudgetModal({
               value={formData.description || ''}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Ej: Préstamo de la compu"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="budget-installment-number">Número de cuota actual (opcional)</Label>
+            <Input
+              id="budget-installment-number"
+              type="number"
+              min="1"
+              value={formData.installmentNumber || ''}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  installmentNumber: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+              placeholder="Ej: 2"
             />
           </div>
 
