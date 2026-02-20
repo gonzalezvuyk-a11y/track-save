@@ -24,6 +24,7 @@ Copia `.env.example` a `.env` y completa:
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 VITE_SUPABASE_GITHUB_ENABLED=false
+VITE_SUPABASE_GOOGLE_ENABLED=false
 ```
 
 ## 3) Configurar base de datos (Supabase Postgres)
@@ -56,6 +57,13 @@ Opcional GitHub OAuth:
 3. Carga Client ID/Secret en Supabase.
 4. Define `VITE_SUPABASE_GITHUB_ENABLED=true`.
 
+Opcional Google OAuth:
+
+1. En Google Cloud Console crea credenciales OAuth 2.0.
+2. Agrega redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
+3. Carga Client ID/Secret en Supabase (Authentication > Providers > Google).
+4. Define `VITE_SUPABASE_GOOGLE_ENABLED=true`.
+
 ## 5) Ejecutar local
 
 ```bash
@@ -69,6 +77,7 @@ npm run dev
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_SUPABASE_GITHUB_ENABLED`
+  - `VITE_SUPABASE_GOOGLE_ENABLED`
 3. Redeploy.
 4. Añade el dominio final en Supabase Auth (Site URL + Redirect URLs).
 
@@ -77,6 +86,7 @@ npm run dev
 - [ ] `VITE_SUPABASE_URL` configurada
 - [ ] `VITE_SUPABASE_ANON_KEY` configurada
 - [ ] `VITE_SUPABASE_GITHUB_ENABLED` (`true` o `false`)
+- [ ] `VITE_SUPABASE_GOOGLE_ENABLED` (`true` o `false`)
 - [ ] Dominio de Vercel agregado en Supabase Auth
 - [ ] Redirect URLs `/reset` y `/dashboard` agregadas en Supabase
 - [ ] `supabase/schema.sql` ejecutado en producción

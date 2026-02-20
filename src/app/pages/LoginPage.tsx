@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthProvider';
-import { isGithubOAuthEnabled, supabase } from '../../lib/supabase';
+import { isGithubOAuthEnabled, isGoogleOAuthEnabled, supabase } from '../../lib/supabase';
 import { loginSchema } from '../../lib/validation/auth';
 import { AuthShell } from './AuthShell';
 
@@ -50,10 +50,10 @@ export default function LoginPage() {
     navigate(redirectTo, { replace: true });
   };
 
-  const signInWithGithub = async () => {
+  const signInWithProvider = async (provider: 'github' | 'google') => {
     const redirect = `${window.location.origin}/dashboard`;
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
+      provider,
       options: { redirectTo: redirect },
     });
 
@@ -97,8 +97,14 @@ export default function LoginPage() {
         </Button>
       </form>
 
+      {isGoogleOAuthEnabled ? (
+        <Button variant="outline" className="w-full" onClick={() => signInWithProvider('google')}>
+          Continuar con Google
+        </Button>
+      ) : null}
+
       {isGithubOAuthEnabled ? (
-        <Button variant="outline" className="w-full" onClick={signInWithGithub}>
+        <Button variant="outline" className="w-full" onClick={() => signInWithProvider('github')}>
           Continuar con GitHub
         </Button>
       ) : null}

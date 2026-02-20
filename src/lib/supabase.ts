@@ -19,3 +19,4 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 export const isGithubOAuthEnabled = env.VITE_SUPABASE_GITHUB_ENABLED === 'true';
+export const isGoogleOAuthEnabled = env.VITE_SUPABASE_GOOGLE_ENABLED === 'true';
