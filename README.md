@@ -45,8 +45,10 @@ En Authentication > URL Configuration:
 
 - Site URL (local): `http://localhost:5173`
 - Redirect URLs:
+  - `http://localhost:5173/login`
   - `http://localhost:5173/reset`
   - `http://localhost:5173/dashboard`
+  - `https://TU_DOMINIO_PROD/login`
   - `https://TU_DOMINIO_PROD/reset`
   - `https://TU_DOMINIO_PROD/dashboard`
 
@@ -89,6 +91,7 @@ npm run dev
 - [ ] `VITE_SUPABASE_GOOGLE_ENABLED` (`true` o `false`)
 - [ ] Dominio de Vercel agregado en Supabase Auth
 - [ ] Redirect URLs `/reset` y `/dashboard` agregadas en Supabase
+- [ ] `vercel.json` con rewrite SPA a `/index.html` (evita 404 al volver de OAuth)
 - [ ] `supabase/schema.sql` ejecutado en producción
 
 ## Comandos útiles

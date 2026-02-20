@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Input } from '../components/ui/input';
@@ -20,6 +20,32 @@ export default function LoginPage() {
     const state = location.state as { from?: { pathname?: string } };
     return state?.from?.pathname ?? '/dashboard';
   }, [location.state]);
+
+  useEffect(() => {
+    const hash = location.hash.startsWith('#') ? location.hash.slice(1) : location.hash;
+    if (!hash) {
+      return;
+    }
+
+    const params = new URLSearchParams(hash);
+    const errorCode = params.get('error_code');
+
+    if (!errorCode) {
+      return;
+    }
+
+    if (errorCode === 'otp_expired') {
+      toast.error('El enlace de confirmación expiró. Solicita uno nuevo y vuelve a intentarlo.');
+    } else {
+      const errorDescription = params.get('error_description');
+      const readableMessage = errorDescription
+        ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
+        : 'No se pudo completar la confirmación del email.';
+      toast.error(readableMessage);
+    }
+
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  }, [location.hash, location.pathname, location.search]);
 
   if (user) {
     return <Navigate to="/dashboard" replace />;

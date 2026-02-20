@@ -41,6 +41,7 @@ export default function RegisterPage() {
       email: parsed.data.email,
       password: parsed.data.password,
       options: {
+        emailRedirectTo: `${window.location.origin}/login`,
         data: {
           full_name: parsed.data.fullName,
         },
