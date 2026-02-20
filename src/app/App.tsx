@@ -309,6 +309,9 @@ export default function App() {
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>(['Trabajo', 'Personal', 'Viaje', 'Familia']);
   const [accounts, setAccounts] = useState<string[]>(DEFAULT_ACCOUNTS);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [editingAccountName, setEditingAccountName] = useState<string | null>(null);
+  const [editingAccountValue, setEditingAccountValue] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   
   // Behavioral features
@@ -511,6 +514,100 @@ export default function App() {
     ensureMonthAvailable(nextMonth);
     setSelectedMonth(nextMonth);
     toast.success('Mes agregado');
+  };
+
+  const handleCreateAccount = () => {
+    const accountName = newAccountName.trim();
+
+    if (!accountName) {
+      toast.error('Escribe un nombre de cuenta');
+      return;
+    }
+
+    if (availableAccounts.includes(accountName)) {
+      toast.error('Esa cuenta ya existe');
+      return;
+    }
+
+    setAccounts((prev) => [...prev, accountName]);
+    setNewAccountName('');
+    toast.success('Cuenta agregada');
+  };
+
+  const handleStartEditAccount = (accountName: string) => {
+    setEditingAccountName(accountName);
+    setEditingAccountValue(accountName);
+  };
+
+  const handleSaveEditAccount = () => {
+    if (!editingAccountName) {
+      return;
+    }
+
+    const nextAccountName = editingAccountValue.trim();
+    if (!nextAccountName) {
+      toast.error('El nombre no puede estar vacío');
+      return;
+    }
+
+    if (nextAccountName !== editingAccountName && availableAccounts.includes(nextAccountName)) {
+      toast.error('Ya existe una cuenta con ese nombre');
+      return;
+    }
+
+    setAccounts((prev) => prev.map((account) => (account === editingAccountName ? nextAccountName : account)));
+    setTransactions((prev) =>
+      prev.map((transaction) =>
+        transaction.account === editingAccountName
+          ? {
+              ...transaction,
+              account: nextAccountName,
+            }
+          : transaction,
+      ),
+    );
+
+    if (filterAccount === editingAccountName) {
+      setFilterAccount(nextAccountName);
+    }
+
+    setEditingAccountName(null);
+    setEditingAccountValue('');
+    toast.success('Cuenta actualizada');
+  };
+
+  const handleDeleteAccount = (accountName: string) => {
+    if (DEFAULT_ACCOUNTS.includes(accountName)) {
+      toast.error('No se puede eliminar una cuenta base');
+      return;
+    }
+
+    if (!confirm(`¿Eliminar la cuenta "${accountName}"? Sus movimientos pasarán a Efectivo.`)) {
+      return;
+    }
+
+    setAccounts((prev) => prev.filter((account) => account !== accountName));
+    setTransactions((prev) =>
+      prev.map((transaction) =>
+        transaction.account === accountName
+          ? {
+              ...transaction,
+              account: 'Cash',
+            }
+          : transaction,
+      ),
+    );
+
+    if (filterAccount === accountName) {
+      setFilterAccount('all');
+    }
+
+    if (editingAccountName === accountName) {
+      setEditingAccountName(null);
+      setEditingAccountValue('');
+    }
+
+    toast.success('Cuenta eliminada y movimientos reasignados a Efectivo');
   };
 
   const ensureTransactionVisible = (transaction: Omit<Transaction, 'id'>) => {
@@ -2109,6 +2206,92 @@ export default function App() {
 
         {/* RIGHT COLUMN */}
         <div className="space-y-8">
+          <Card className="rounded-2xl shadow-sm border-neutral-200">
+            <CardHeader>
+              <CardTitle>Cuentas</CardTitle>
+              <CardDescription>Gestiona tus cuentas de banco/tarjeta/efectivo</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nueva cuenta (ej: Itaú)"
+                  value={newAccountName}
+                  onChange={(e) => setNewAccountName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCreateAccount();
+                    }
+                  }}
+                />
+                <Button type="button" onClick={handleCreateAccount}>
+                  Agregar
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {availableAccounts.map((account) => {
+                  const isDefaultAccount = DEFAULT_ACCOUNTS.includes(account);
+                  const isEditing = editingAccountName === account;
+
+                  return (
+                    <div
+                      key={account}
+                      className="flex items-center gap-2 p-2 rounded-lg border border-neutral-200"
+                    >
+                      {isEditing ? (
+                        <Input
+                          value={editingAccountValue}
+                          onChange={(e) => setEditingAccountValue(e.target.value)}
+                          className="h-8"
+                        />
+                      ) : (
+                        <span className="flex-1 text-sm font-medium">
+                          {account === 'Cash'
+                            ? 'Efectivo'
+                            : account === 'Bank'
+                              ? 'Banco'
+                              : account === 'Card'
+                                ? 'Tarjeta'
+                                : account}
+                        </span>
+                      )}
+
+                      {isDefaultAccount ? (
+                        <Badge variant="outline">Base</Badge>
+                      ) : isEditing ? (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={handleSaveEditAccount}>
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingAccountName(null);
+                              setEditingAccountValue('');
+                            }}
+                          >
+                            <X className="w-4 h-4 text-neutral-500" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => handleStartEditAccount(account)}>
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDeleteAccount(account)}>
+                            <Trash2 className="w-4 h-4 text-rose-600" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Budget vs Spent */}
           <Card className="rounded-2xl shadow-sm border-neutral-200">
             <CardHeader>
