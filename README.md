@@ -45,9 +45,11 @@ En Authentication > URL Configuration:
 
 - Site URL (local): `http://localhost:5173`
 - Redirect URLs:
+  - `http://localhost:5173/auth/callback`
   - `http://localhost:5173/login`
   - `http://localhost:5173/reset`
   - `http://localhost:5173/dashboard`
+  - `https://TU_DOMINIO_PROD/auth/callback`
   - `https://TU_DOMINIO_PROD/login`
   - `https://TU_DOMINIO_PROD/reset`
   - `https://TU_DOMINIO_PROD/dashboard`

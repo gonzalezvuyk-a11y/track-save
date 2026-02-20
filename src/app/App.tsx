@@ -4,7 +4,8 @@ import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, CreditCard,
   Copy, Calculator, DollarSign, BarChart as BarChartIcon,
   Target, Calendar, Zap, Tag, StickyNote, Check, X, Bell, AlertCircle,
-  ShieldOff, ShieldCheck, Repeat, Clock, Ban, Play, Pause, Moon, Sun
+  ShieldOff, ShieldCheck, Repeat, Clock, Ban, Play, Pause, Moon, Sun,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from './components/ui/button';
@@ -127,6 +128,13 @@ const DEFAULT_CATEGORIES: Category[] = [
 const getCurrentMonth = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const shiftMonth = (month: string, delta: number) => {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const date = new Date(year, monthNumber - 1, 1);
+  date.setMonth(date.getMonth() + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 };
 
 const DEFAULT_BUDGETS = (month: string): BudgetRow[] => [
@@ -253,6 +261,7 @@ export default function App() {
   const [budgets, setBudgets] = useState<BudgetRow[]>([]);
   const [debts, setDebts] = useState<Debt[]>(DEFAULT_DEBTS);
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
+  const [customMonths, setCustomMonths] = useState<string[]>([]);
   const [currency, setCurrency] = useState('PYG');
   const [monthlyGoals, setMonthlyGoals] = useState<MonthlyGoal[]>([]);
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
@@ -303,6 +312,7 @@ export default function App() {
     const savedSubscriptions = localStorage.getItem('finance-subscriptions');
     const savedReminders = localStorage.getItem('finance-reminders');
     const savedDarkMode = localStorage.getItem('finance-dark-mode');
+    const savedCustomMonths = localStorage.getItem('finance-custom-months');
 
     if (savedDarkMode) setIsDarkMode(JSON.parse(savedDarkMode));
     if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
@@ -344,6 +354,7 @@ export default function App() {
     if (savedWeeklyBudgets) setWeeklyBudgets(JSON.parse(savedWeeklyBudgets));
     if (savedSubscriptions) setSubscriptions(JSON.parse(savedSubscriptions));
     if (savedReminders) setPaymentReminders(JSON.parse(savedReminders));
+    if (savedCustomMonths) setCustomMonths(JSON.parse(savedCustomMonths));
   }, []);
 
   // Dark mode effect
@@ -405,6 +416,10 @@ export default function App() {
     localStorage.setItem('finance-reminders', JSON.stringify(paymentReminders));
   }, [paymentReminders]);
 
+  useEffect(() => {
+    localStorage.setItem('finance-custom-months', JSON.stringify(customMonths));
+  }, [customMonths]);
+
   // Auto-detect subscriptions when transactions change
   useEffect(() => {
     const detected = detectSubscriptions(transactions);
@@ -415,10 +430,30 @@ export default function App() {
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
     transactions.forEach(t => months.add(getMonthFromDate(t.date)));
+    budgets.forEach(b => months.add(b.month));
+    monthlyGoals.forEach(g => months.add(g.month));
+    customMonths.forEach(month => months.add(month));
     // Always include current month
     months.add(getCurrentMonth());
     return Array.from(months).sort().reverse();
-  }, [transactions]);
+  }, [transactions, budgets, monthlyGoals, customMonths]);
+
+  const ensureMonthAvailable = (month: string) => {
+    setCustomMonths(prev => (prev.includes(month) ? prev : [...prev, month]));
+  };
+
+  const handleChangeMonth = (delta: number) => {
+    const nextMonth = shiftMonth(selectedMonth, delta);
+    ensureMonthAvailable(nextMonth);
+    setSelectedMonth(nextMonth);
+  };
+
+  const handleAddNextMonth = () => {
+    const nextMonth = shiftMonth(selectedMonth, 1);
+    ensureMonthAvailable(nextMonth);
+    setSelectedMonth(nextMonth);
+    toast.success('Mes agregado');
+  };
 
   const monthTransactions = useMemo(() => {
     return transactions.filter(t => getMonthFromDate(t.date) === selectedMonth);
@@ -1037,7 +1072,16 @@ export default function App() {
                 )}
               </Button>
               
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleChangeMonth(-1)}
+                  className="rounded-full w-11 h-11 border-border/50 hover:border-primary/50 hover:bg-accent/50 transition-all"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="w-[180px] rounded-xl border-border/50">
                   <SelectValue />
                 </SelectTrigger>
@@ -1051,7 +1095,24 @@ export default function App() {
                     </SelectItem>
                   ))}
                 </SelectContent>
-              </Select>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleChangeMonth(1)}
+                  className="rounded-full w-11 h-11 border-border/50 hover:border-primary/50 hover:bg-accent/50 transition-all"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleAddNextMonth}
+                  className="rounded-xl border-border/50 hover:border-primary/50 hover:bg-accent/50"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar mes
+                </Button>
+              </div>
               
               <Select value={currency} onValueChange={setCurrency}>
                 <SelectTrigger className="w-[120px] rounded-xl border-border/50">

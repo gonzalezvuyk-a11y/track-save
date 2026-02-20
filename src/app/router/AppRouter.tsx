@@ -8,6 +8,7 @@ import LoginPage from '../pages/LoginPage';
 import ProfilePage from '../pages/ProfilePage';
 import RegisterPage from '../pages/RegisterPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
+import AuthCallbackPage from '../pages/AuthCallbackPage';
 
 function HomeRedirect() {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ export default function AppRouter() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot" element={<ForgotPasswordPage />} />
       <Route path="/reset" element={<ResetPasswordPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<ProtectedLayout />}>

@@ -77,7 +77,7 @@ export default function LoginPage() {
   };
 
   const signInWithProvider = async (provider: 'github' | 'google') => {
-    const redirect = `${window.location.origin}/dashboard`;
+    const redirect = `${window.location.origin}/auth/callback`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo: redirect },
