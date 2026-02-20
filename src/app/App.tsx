@@ -48,6 +48,9 @@ interface BudgetRow {
   month: string; // YYYY-MM
   category: string;
   budget: number;
+  description?: string;
+  installments?: number;
+  paidAt?: string;
 }
 
 interface Debt {
@@ -262,6 +265,14 @@ const detectSubscriptions = (transactions: Transaction[]): Subscription[] => {
 
 const getMonthFromDate = (date: string) => {
   return date.substring(0, 7); // YYYY-MM
+};
+
+const getBudgetPaymentDate = (month: string) => {
+  const currentMonth = getCurrentMonth();
+  if (month === currentMonth) {
+    return new Date().toISOString().split('T')[0];
+  }
+  return `${month}-01`;
 };
 
 // ===== MAIN APP =====
@@ -892,10 +903,52 @@ export default function App() {
       ...b,
       id: crypto.randomUUID(),
       month: selectedMonth,
+      paidAt: undefined,
     }));
     
     setBudgets([...budgets, ...newBudgets]);
     toast.success(`${newBudgets.length} presupuestos copiados`);
+  };
+
+  const handleMarkBudgetAsPaid = (budgetRow: BudgetRow) => {
+    if (budgetRow.paidAt) {
+      toast.info('Este presupuesto ya está marcado como pagado');
+      return;
+    }
+
+    if (budgetRow.budget <= 0) {
+      toast.error('El presupuesto debe ser mayor a 0 para registrarlo como pagado');
+      return;
+    }
+
+    const paymentDate = getBudgetPaymentDate(budgetRow.month);
+    const description = budgetRow.description?.trim() || budgetRow.category;
+
+    const newTransaction: Transaction = {
+      id: crypto.randomUUID(),
+      date: paymentDate,
+      description: `Pago presupuesto: ${description}`,
+      category: budgetRow.category,
+      type: 'Expense',
+      account: 'Bank',
+      amount: budgetRow.budget,
+      tags: ['Presupuesto'],
+      notes: budgetRow.installments ? `Pago en ${budgetRow.installments} cuotas` : '',
+    };
+
+    setTransactions(prev => [...prev, newTransaction]);
+    setBudgets(prev =>
+      prev.map(b =>
+        b.id === budgetRow.id
+          ? {
+              ...b,
+              paidAt: paymentDate,
+            }
+          : b,
+      ),
+    );
+
+    toast.success('Pago registrado y movimiento creado automáticamente');
   };
 
   const handleAddDebt = (debt: Omit<Debt, 'id'>) => {
@@ -1885,10 +1938,6 @@ export default function App() {
               {filteredTransactions.length === 0 ? (
                 <div className="text-center py-12 text-neutral-500">
                   <p className="mb-4">No hay movimientos para mostrar</p>
-                  <Button onClick={() => setIsTransactionModalOpen(true)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Agregar tu primer movimiento
-                  </Button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -1971,6 +2020,12 @@ export default function App() {
                   </Table>
                 </div>
               )}
+              <div className="pt-4">
+                <Button onClick={() => setIsTransactionModalOpen(true)} className="w-full" variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar nuevo movimiento
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1998,10 +2053,6 @@ export default function App() {
               {budgetStats.length === 0 ? (
                 <div className="text-center py-12 text-neutral-500">
                   <p className="mb-4">No hay presupuestos configurados</p>
-                  <Button onClick={() => setIsBudgetModalOpen(true)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Agregar tu primer presupuesto
-                  </Button>
                 </div>
               ) : (
                 <>
@@ -2017,17 +2068,29 @@ export default function App() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Categoría</TableHead>
+                        <TableHead>Detalle</TableHead>
                         <TableHead className="text-right">Presupuesto</TableHead>
                         <TableHead className="text-right">Gastado</TableHead>
                         <TableHead className="text-right">Diferencia</TableHead>
                         <TableHead>% Usado</TableHead>
+                        <TableHead>Estado</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {budgetStats.map(stat => (
                         <TableRow key={stat.id} className="group">
-                          <TableCell className="font-medium">{stat.category}</TableCell>
+                          <TableCell className="font-medium">
+                            <div className="space-y-1">
+                              <div>{stat.category}</div>
+                              {stat.installments ? (
+                                <div className="text-xs text-neutral-500">{stat.installments} cuotas</div>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-neutral-600">
+                            {stat.description?.trim() ? stat.description : '—'}
+                          </TableCell>
                           <TableCell className="text-right text-neutral-700">
                             {stat.budget === 0 ? '—' : formatCurrency(stat.budget, currency)}
                           </TableCell>
@@ -2051,8 +2114,23 @@ export default function App() {
                               </div>
                             </div>
                           </TableCell>
+                          <TableCell>
+                            {stat.paidAt ? (
+                              <Badge variant="secondary">Pagado</Badge>
+                            ) : (
+                              <Badge variant="outline">Pendiente</Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleMarkBudgetAsPaid(stat)}
+                                disabled={Boolean(stat.paidAt)}
+                              >
+                                <Check className="w-4 h-4 text-emerald-600" />
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -2079,6 +2157,12 @@ export default function App() {
                 </div>
                 </>
               )}
+              <div className="pt-4">
+                <Button onClick={() => setIsBudgetModalOpen(true)} className="w-full" variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar nuevo presupuesto
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -2103,10 +2187,6 @@ export default function App() {
               {debtStats.length === 0 ? (
                 <div className="text-center py-12 text-neutral-500">
                   <p className="mb-4">No hay deudas registradas</p>
-                  <Button onClick={() => setIsDebtModalOpen(true)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Agregar deuda
-                  </Button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -2175,6 +2255,12 @@ export default function App() {
                   </Table>
                 </div>
               )}
+              <div className="pt-4">
+                <Button onClick={() => setIsDebtModalOpen(true)} className="w-full" variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar nueva deuda
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -2555,6 +2641,9 @@ function BudgetModal({
     month: selectedMonth,
     category: '',
     budget: 0,
+    description: '',
+    installments: undefined,
+    paidAt: undefined,
   });
 
   useEffect(() => {
@@ -2565,6 +2654,9 @@ function BudgetModal({
         month: selectedMonth,
         category: '',
         budget: 0,
+        description: '',
+        installments: undefined,
+        paidAt: undefined,
       });
     }
   }, [budget, selectedMonth, isOpen]);
@@ -2615,6 +2707,33 @@ function BudgetModal({
               value={formatNumberWithDots(formData.budget)}
               onChange={(e) => setFormData({ ...formData, budget: parseNumberFromDots(e.target.value) })}
               required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="budget-description">Descripción (opcional)</Label>
+            <Input
+              id="budget-description"
+              value={formData.description || ''}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Ej: Préstamo de la compu"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="budget-installments">Número de cuotas (opcional)</Label>
+            <Input
+              id="budget-installments"
+              type="number"
+              min="1"
+              value={formData.installments || ''}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  installments: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+              placeholder="Ej: 12"
             />
           </div>
           
