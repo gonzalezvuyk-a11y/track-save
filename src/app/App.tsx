@@ -170,6 +170,16 @@ const formatCurrency = (amount: number, currency: string = 'PYG') => {
   return new Intl.NumberFormat('es-PY', options).format(amount);
 };
 
+const formatNumberWithDots = (value: number) => {
+  if (!value) return '';
+  return Math.trunc(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+const parseNumberFromDots = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  return digits ? Number(digits) : 0;
+};
+
 // Get ISO week number
 const getISOWeek = (date: Date): number => {
   const target = new Date(date.valueOf());
@@ -2361,11 +2371,10 @@ function TransactionModal({
               <Label htmlFor="amount">Monto</Label>
               <Input
                 id="amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
+                type="text"
+                inputMode="numeric"
+                value={formatNumberWithDots(formData.amount)}
+                onChange={(e) => setFormData({ ...formData, amount: parseNumberFromDots(e.target.value) })}
                 required
               />
             </div>
@@ -2601,11 +2610,10 @@ function BudgetModal({
             <Label htmlFor="budget-amount">Presupuesto</Label>
             <Input
               id="budget-amount"
-              type="number"
-              step="0.01"
-              min="0"
-              value={formData.budget}
-              onChange={(e) => setFormData({ ...formData, budget: parseFloat(e.target.value) })}
+              type="text"
+              inputMode="numeric"
+              value={formatNumberWithDots(formData.budget)}
+              onChange={(e) => setFormData({ ...formData, budget: parseNumberFromDots(e.target.value) })}
               required
             />
           </div>
@@ -2691,11 +2699,10 @@ function DebtModal({
               <Label htmlFor="debt-balance">Balance total</Label>
               <Input
                 id="debt-balance"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.balance}
-                onChange={(e) => setFormData({ ...formData, balance: parseFloat(e.target.value) })}
+                type="text"
+                inputMode="numeric"
+                value={formatNumberWithDots(formData.balance)}
+                onChange={(e) => setFormData({ ...formData, balance: parseNumberFromDots(e.target.value) })}
                 required
               />
             </div>
@@ -2721,11 +2728,10 @@ function DebtModal({
               <Label htmlFor="debt-payment">Pago mensual</Label>
               <Input
                 id="debt-payment"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.monthlyPayment}
-                onChange={(e) => setFormData({ ...formData, monthlyPayment: parseFloat(e.target.value) })}
+                type="text"
+                inputMode="numeric"
+                value={formatNumberWithDots(formData.monthlyPayment)}
+                onChange={(e) => setFormData({ ...formData, monthlyPayment: parseNumberFromDots(e.target.value) })}
                 required
               />
             </div>
@@ -2941,12 +2947,11 @@ function GoalModal({
               Meta de ahorro ({getCurrencySymbol(currency)})
             </label>
             <Input
-              type="number"
-              value={formData.savingsTarget || ''}
-              onChange={(e) => setFormData({ ...formData, savingsTarget: Number(e.target.value) })}
+              type="text"
+              inputMode="numeric"
+              value={formatNumberWithDots(formData.savingsTarget)}
+              onChange={(e) => setFormData({ ...formData, savingsTarget: parseNumberFromDots(e.target.value) })}
               placeholder="¿Cuánto querés ahorrar este mes?"
-              min="0"
-              step="0.01"
             />
           </div>
 
@@ -2956,12 +2961,11 @@ function GoalModal({
               Tope de gastos variables ({getCurrencySymbol(currency)})
             </label>
             <Input
-              type="number"
-              value={formData.variableSpendingLimit || ''}
-              onChange={(e) => setFormData({ ...formData, variableSpendingLimit: Number(e.target.value) })}
+              type="text"
+              inputMode="numeric"
+              value={formatNumberWithDots(formData.variableSpendingLimit)}
+              onChange={(e) => setFormData({ ...formData, variableSpendingLimit: parseNumberFromDots(e.target.value) })}
               placeholder="Límite para gastos no esenciales"
-              min="0"
-              step="0.01"
             />
             <p className="text-xs text-neutral-500">
               Gastos como restaurantes, entretenimiento, compras, etc.
@@ -2974,12 +2978,11 @@ function GoalModal({
               Pago mínimo de deudas ({getCurrencySymbol(currency)})
             </label>
             <Input
-              type="number"
-              value={formData.minimumDebtPayment || ''}
-              onChange={(e) => setFormData({ ...formData, minimumDebtPayment: Number(e.target.value) })}
+              type="text"
+              inputMode="numeric"
+              value={formatNumberWithDots(formData.minimumDebtPayment)}
+              onChange={(e) => setFormData({ ...formData, minimumDebtPayment: parseNumberFromDots(e.target.value) })}
               placeholder="Monto mínimo a pagar en deudas"
-              min="0"
-              step="0.01"
             />
           </div>
 
@@ -3031,7 +3034,7 @@ function QuickAddModal({
       category,
       type,
       account: 'Cash',
-      amount: parseFloat(amount),
+      amount: parseNumberFromDots(amount),
       tags: [],
       notes: '',
     });
@@ -3102,11 +3105,10 @@ function QuickAddModal({
             <Label htmlFor="quick-amount">Monto</Label>
             <Input
               id="quick-amount"
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="numeric"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => setAmount(formatNumberWithDots(parseNumberFromDots(e.target.value)))}
               placeholder="0.00"
               autoFocus
               className="text-2xl font-semibold h-14"
