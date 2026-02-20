@@ -29,10 +29,6 @@ export const getCurrentMonth = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
-export const getDefaultDateForMonth = (month: string) => {
-  const currentMonth = getCurrentMonth();
-  if (month === currentMonth) {
-    return new Date().toISOString().split('T')[0];
-  }
-  return `${month}-01`;
+export const getDefaultDateForMonth = (_month: string) => {
+  return new Date().toISOString().split('T')[0];
 };
