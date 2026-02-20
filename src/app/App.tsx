@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Download, Upload, Search, Filter, Edit2, Trash2, 
   TrendingUp, TrendingDown, Wallet, PiggyBank, CreditCard,
@@ -7,7 +7,6 @@ import {
   ShieldOff, ShieldCheck, Repeat, Clock, Ban, Play, Pause, Moon, Sun,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
@@ -21,8 +20,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Switch } from './components/ui/switch';
 import { toast } from 'sonner';
 import { Toaster } from './components/ui/sonner';
-import { WeeklyBudgetModal } from './components/WeeklyBudgetModal';
-import { ReminderModal } from './components/ReminderModal';
+import { formatCurrency, getCurrentMonth, getDefaultDateForMonth } from './lib/finance';
+
+const TransactionModal = lazy(() =>
+  import('./components/TransactionModal').then((module) => ({ default: module.TransactionModal })),
+);
+const QuickAddModal = lazy(() =>
+  import('./components/QuickAddModal').then((module) => ({ default: module.QuickAddModal })),
+);
+const BudgetModal = lazy(() =>
+  import('./components/BudgetModal').then((module) => ({ default: module.BudgetModal })),
+);
+const DebtModal = lazy(() =>
+  import('./components/DebtModal').then((module) => ({ default: module.DebtModal })),
+);
+const PayoffPlanModal = lazy(() =>
+  import('./components/PayoffPlanModal').then((module) => ({ default: module.PayoffPlanModal })),
+);
+const GoalModal = lazy(() =>
+  import('./components/GoalModal').then((module) => ({ default: module.GoalModal })),
+);
+const WeeklyBudgetModal = lazy(() =>
+  import('./components/WeeklyBudgetModal').then((module) => ({ default: module.WeeklyBudgetModal })),
+);
+const ReminderModal = lazy(() =>
+  import('./components/ReminderModal').then((module) => ({ default: module.ReminderModal })),
+);
+const MonthlyIncomeExpenseChart = lazy(() =>
+  import('./components/MonthlyIncomeExpenseChart').then((module) => ({
+    default: module.MonthlyIncomeExpenseChart,
+  })),
+);
 
 // ===== TYPES =====
 interface Transaction {
@@ -129,11 +157,6 @@ const DEFAULT_CATEGORIES: Category[] = [
   { name: 'Préstamo', group: 'Debt', essential: true },
 ];
 
-const getCurrentMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-};
-
 const shiftMonth = (month: string, delta: number) => {
   const [year, monthNumber] = month.split('-').map(Number);
   const date = new Date(year, monthNumber - 1, 1);
@@ -159,30 +182,6 @@ const DEFAULT_DEBTS: Debt[] = [
 ];
 
 // ===== UTILITY FUNCTIONS =====
-const formatCurrency = (amount: number, currency: string = 'PYG') => {
-  // PYG doesn't use decimal places
-  const options: Intl.NumberFormatOptions = {
-    style: 'currency',
-    currency: currency,
-  };
-  
-  if (currency === 'PYG') {
-    options.minimumFractionDigits = 0;
-    options.maximumFractionDigits = 0;
-  }
-  
-  return new Intl.NumberFormat('es-PY', options).format(amount);
-};
-
-const formatNumberWithDots = (value: number) => {
-  if (!value) return '';
-  return Math.trunc(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-};
-
-const parseNumberFromDots = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  return digits ? Number(digits) : 0;
-};
 
 // Get ISO week number
 const getISOWeek = (date: Date): number => {
@@ -266,14 +265,6 @@ const detectSubscriptions = (transactions: Transaction[]): Subscription[] => {
 
 const getMonthFromDate = (date: string) => {
   return date.substring(0, 7); // YYYY-MM
-};
-
-const getDefaultDateForMonth = (month: string) => {
-  const currentMonth = getCurrentMonth();
-  if (month === currentMonth) {
-    return new Date().toISOString().split('T')[0];
-  }
-  return `${month}-01`;
 };
 
 const getBudgetPaymentDate = (month: string) => {
@@ -502,6 +493,30 @@ export default function App() {
     ensureMonthAvailable(nextMonth);
     setSelectedMonth(nextMonth);
     toast.success('Mes agregado');
+  };
+
+  const ensureTransactionVisible = (transaction: Omit<Transaction, 'id'>) => {
+    const transactionMonth = getMonthFromDate(transaction.date);
+    const descriptionMatch = transaction.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const categoryMatch = transaction.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery.trim() || descriptionMatch || categoryMatch;
+    const matchesType = filterType === 'all' || transaction.type === filterType;
+    const matchesAccount = filterAccount === 'all' || transaction.account === filterAccount;
+    const matchesCategory = filterCategory === 'all' || transaction.category === filterCategory;
+
+    if (transactionMonth !== selectedMonth) {
+      ensureMonthAvailable(transactionMonth);
+      setSelectedMonth(transactionMonth);
+      toast.info('Se cambió al mes del movimiento para mostrarlo en la lista');
+    }
+
+    if (!matchesSearch || !matchesType || !matchesAccount || !matchesCategory) {
+      setSearchQuery('');
+      setFilterType('all');
+      setFilterAccount('all');
+      setFilterCategory('all');
+      toast.info('Se limpiaron filtros para mostrar el movimiento recién guardado');
+    }
   };
 
   const monthTransactions = useMemo(() => {
@@ -861,6 +876,7 @@ export default function App() {
       id: crypto.randomUUID(),
     };
     
+    ensureTransactionVisible(transaction);
     setTransactions([...transactions, newTransaction]);
     toast.success('Movimiento agregado');
     setIsTransactionModalOpen(false);
@@ -873,6 +889,7 @@ export default function App() {
       return;
     }
     
+    ensureTransactionVisible(updated);
     setTransactions(transactions.map(t => 
       t.id === id ? { ...updated, id } : t
     ));
@@ -1837,27 +1854,11 @@ export default function App() {
                   <p className="text-xs text-muted-foreground mt-1">Agregá movimientos para ver el análisis</p>
                 </div>
               ) : (
-                <div className="h-[200px] w-full p-4 glass rounded-3xl border border-border/30">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
-                      <XAxis dataKey="name" stroke="currentColor" opacity={0.5} />
-                      <YAxis stroke="currentColor" opacity={0.5} />
-                      <Tooltip 
-                        formatter={(value) => formatCurrency(Number(value), currency)}
-                        contentStyle={{ 
-                          backgroundColor: 'var(--popover)',
-                          border: '1px solid var(--border)',
-                          borderRadius: '1rem',
-                          backdropFilter: 'blur(20px)'
-                        }}
-                      />
-                      <Legend />
-                      <Bar dataKey="Ingresos" fill="#059669" radius={[8, 8, 0, 0]} />
-                      <Bar dataKey="Gastos" fill="#e11d48" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <Suspense
+                  fallback={<div className="h-[200px] w-full p-4 glass rounded-3xl border border-border/30" />}
+                >
+                  <MonthlyIncomeExpenseChart chartData={chartData} currency={currency} />
+                </Suspense>
               )}
 
               {/* Queda para gastar */}
@@ -2325,1040 +2326,99 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      <TransactionModal
-        isOpen={isTransactionModalOpen}
-        onClose={() => {
-          setIsTransactionModalOpen(false);
-          setEditingTransaction(null);
-        }}
-        onSave={editingTransaction 
-          ? (t) => handleUpdateTransaction(editingTransaction.id, t)
-          : handleAddTransaction
-        }
-        categories={categories}
-        selectedMonth={selectedMonth}
-        transaction={editingTransaction}
-        availableTags={availableTags}
-        onAddTag={(tag) => {
-          if (!availableTags.includes(tag)) {
-            setAvailableTags([...availableTags, tag]);
+      <Suspense fallback={null}>
+        <TransactionModal
+          isOpen={isTransactionModalOpen}
+          onClose={() => {
+            setIsTransactionModalOpen(false);
+            setEditingTransaction(null);
+          }}
+          onSave={editingTransaction 
+            ? (t) => handleUpdateTransaction(editingTransaction.id, t)
+            : handleAddTransaction
           }
-        }}
-      />
+          categories={categories}
+          selectedMonth={selectedMonth}
+          transaction={editingTransaction}
+          availableTags={availableTags}
+          onAddTag={(tag) => {
+            if (!availableTags.includes(tag)) {
+              setAvailableTags([...availableTags, tag]);
+            }
+          }}
+        />
 
-      <BudgetModal
-        isOpen={isBudgetModalOpen}
-        onClose={() => {
-          setIsBudgetModalOpen(false);
-          setEditingBudget(null);
-        }}
-        onSave={editingBudget
-          ? (b) => handleUpdateBudget(editingBudget.id, b)
-          : handleAddBudget
-        }
-        categories={categories}
-        selectedMonth={selectedMonth}
-        budget={editingBudget}
-      />
+        <BudgetModal
+          isOpen={isBudgetModalOpen}
+          onClose={() => {
+            setIsBudgetModalOpen(false);
+            setEditingBudget(null);
+          }}
+          onSave={editingBudget
+            ? (b) => handleUpdateBudget(editingBudget.id, b)
+            : handleAddBudget
+          }
+          categories={categories}
+          selectedMonth={selectedMonth}
+          budget={editingBudget}
+        />
 
-      <DebtModal
-        isOpen={isDebtModalOpen}
-        onClose={() => {
-          setIsDebtModalOpen(false);
-          setEditingDebt(null);
-        }}
-        onSave={editingDebt
-          ? (d) => handleUpdateDebt(editingDebt.id, d)
-          : handleAddDebt
-        }
-        debt={editingDebt}
-      />
+        <DebtModal
+          isOpen={isDebtModalOpen}
+          onClose={() => {
+            setIsDebtModalOpen(false);
+            setEditingDebt(null);
+          }}
+          onSave={editingDebt
+            ? (d) => handleUpdateDebt(editingDebt.id, d)
+            : handleAddDebt
+          }
+          debt={editingDebt}
+        />
 
-      <PayoffPlanModal
-        isOpen={isPayoffModalOpen}
-        onClose={() => setIsPayoffModalOpen(false)}
-        debts={debts}
-        currency={currency}
-      />
+        <PayoffPlanModal
+          isOpen={isPayoffModalOpen}
+          onClose={() => setIsPayoffModalOpen(false)}
+          debts={debts}
+          currency={currency}
+        />
 
-      <GoalModal
-        isOpen={isGoalModalOpen}
-        onClose={() => setIsGoalModalOpen(false)}
-        onSave={handleSaveGoal}
-        goal={currentGoal}
-        currency={currency}
-      />
+        <GoalModal
+          isOpen={isGoalModalOpen}
+          onClose={() => setIsGoalModalOpen(false)}
+          onSave={handleSaveGoal}
+          goal={currentGoal}
+          currency={currency}
+        />
 
-      <QuickAddModal
-        isOpen={isQuickAddOpen}
-        onClose={() => setIsQuickAddOpen(false)}
-        onSave={handleAddTransaction}
-        categories={categories}
-      />
+        <QuickAddModal
+          isOpen={isQuickAddOpen}
+          onClose={() => setIsQuickAddOpen(false)}
+          onSave={handleAddTransaction}
+          categories={categories}
+          selectedMonth={selectedMonth}
+        />
 
-      <WeeklyBudgetModal
-        isOpen={isWeeklyBudgetModalOpen}
-        onClose={() => setIsWeeklyBudgetModalOpen(false)}
-        onSave={(wb) => {
-          setWeeklyBudgets([...weeklyBudgets, { ...wb, id: crypto.randomUUID() }]);
-          toast.success('Presupuesto semanal agregado');
-        }}
-        categories={categories}
-        currency={currency}
-      />
+        <WeeklyBudgetModal
+          isOpen={isWeeklyBudgetModalOpen}
+          onClose={() => setIsWeeklyBudgetModalOpen(false)}
+          onSave={(wb) => {
+            setWeeklyBudgets([...weeklyBudgets, { ...wb, id: crypto.randomUUID() }]);
+            toast.success('Presupuesto semanal agregado');
+          }}
+          categories={categories}
+          currency={currency}
+        />
 
-      <ReminderModal
-        isOpen={isReminderModalOpen}
-        onClose={() => setIsReminderModalOpen(false)}
-        onSave={(reminder) => {
-          setPaymentReminders([...paymentReminders, { ...reminder, id: crypto.randomUUID() }]);
-          toast.success('Recordatorio agregado');
-        }}
-      />
+        <ReminderModal
+          isOpen={isReminderModalOpen}
+          onClose={() => setIsReminderModalOpen(false)}
+          onSave={(reminder) => {
+            setPaymentReminders([...paymentReminders, { ...reminder, id: crypto.randomUUID() }]);
+            toast.success('Recordatorio agregado');
+          }}
+        />
+      </Suspense>
     </div>
-  );
-}
-
-// ===== TRANSACTION MODAL =====
-function TransactionModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  categories, 
-  selectedMonth,
-  transaction,
-  availableTags,
-  onAddTag
-}: { 
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (t: Omit<Transaction, 'id'>) => void;
-  categories: Category[];
-  selectedMonth: string;
-  transaction: Transaction | null;
-  availableTags: string[];
-  onAddTag: (tag: string) => void;
-}) {
-  const [formData, setFormData] = useState<Omit<Transaction, 'id'>>({
-    date: getDefaultDateForMonth(selectedMonth),
-    description: '',
-    category: '',
-    type: 'Expense',
-    account: 'Cash',
-    amount: 0,
-    tags: [],
-    notes: '',
-  });
-
-  useEffect(() => {
-    if (transaction) {
-      setFormData(transaction);
-    } else {
-      setFormData({
-        date: getDefaultDateForMonth(selectedMonth),
-        description: '',
-        category: '',
-        type: 'Expense',
-        account: 'Cash',
-        amount: 0,
-        tags: [],
-        notes: '',
-      });
-    }
-  }, [transaction, isOpen, selectedMonth]);
-
-  const [newTag, setNewTag] = useState('');
-
-  const handleAddTagToTransaction = () => {
-    if (newTag.trim()) {
-      const tag = newTag.trim();
-      if (!formData.tags?.includes(tag)) {
-        setFormData({ ...formData, tags: [...(formData.tags || []), tag] });
-        onAddTag(tag);
-      }
-      setNewTag('');
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setFormData({ ...formData, tags: formData.tags?.filter(t => t !== tagToRemove) || [] });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.category.trim()) {
-      toast.error('Selecciona una categoría');
-      return;
-    }
-
-    if (!formData.description.trim()) {
-      toast.error('La descripción es requerida');
-      return;
-    }
-
-    if (!formData.amount || formData.amount <= 0) {
-      toast.error('El monto debe ser mayor a 0');
-      return;
-    }
-
-    onSave(formData);
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>
-            {transaction ? 'Editar movimiento' : 'Agregar movimiento'}
-          </DialogTitle>
-          <DialogDescription>
-            Completa los detalles de la transacción
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="date">Fecha</Label>
-              <Input
-                id="date"
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="amount">Monto</Label>
-              <Input
-                id="amount"
-                type="text"
-                inputMode="numeric"
-                value={formatNumberWithDots(formData.amount)}
-                onChange={(e) => setFormData({ ...formData, amount: parseNumberFromDots(e.target.value) })}
-                required
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción</Label>
-            <Input
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              required
-            />
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="type">Tipo</Label>
-              <Select 
-                value={formData.type} 
-                onValueChange={(value: 'Income' | 'Expense') => 
-                  setFormData({ ...formData, type: value })
-                }
-              >
-                <SelectTrigger id="type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Income">Ingreso</SelectItem>
-                  <SelectItem value="Expense">Gasto</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="account">Cuenta</Label>
-              <Select 
-                value={formData.account} 
-                onValueChange={(value: 'Cash' | 'Bank' | 'Card') => 
-                  setFormData({ ...formData, account: value })
-                }
-              >
-                <SelectTrigger id="account">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Cash">Efectivo</SelectItem>
-                  <SelectItem value="Bank">Banco</SelectItem>
-                  <SelectItem value="Card">Tarjeta</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="category">Categoría</Label>
-            <Select 
-              value={formData.category} 
-              onValueChange={(value) => setFormData({ ...formData, category: value })}
-            >
-              <SelectTrigger id="category">
-                <SelectValue placeholder="Selecciona una categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map(cat => (
-                  <SelectItem key={cat.name} value={cat.name}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="tags">Etiquetas (opcional)</Label>
-            <div className="flex gap-2">
-              <Input
-                id="tags"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                placeholder="Ej: Trabajo, Viaje..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddTagToTransaction();
-                  }
-                }}
-              />
-              <Button type="button" variant="outline" onClick={handleAddTagToTransaction}>
-                <Tag className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            {/* Suggested tags */}
-            {availableTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {availableTags.map(tag => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => {
-                      if (!formData.tags?.includes(tag)) {
-                        setFormData({ ...formData, tags: [...(formData.tags || []), tag] });
-                      }
-                    }}
-                    className="text-xs px-2 py-1 rounded-md border border-neutral-300 bg-neutral-50 hover:bg-neutral-100 text-neutral-700"
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            )}
-            
-            {/* Selected tags */}
-            {formData.tags && formData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {formData.tags.map(tag => (
-                  <Badge key={tag} variant="secondary" className="gap-1">
-                    <Tag className="w-3 h-3" />
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="ml-1 hover:text-rose-600"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notas (opcional)</Label>
-            <Input
-              id="notes"
-              value={formData.notes || ''}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Ej: Recibo guardado en Drive"
-            />
-            <p className="text-xs text-neutral-500">
-              💡 Podés agregar detalles como número de factura, referencia, etc.
-            </p>
-          </div>
-          
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">
-              {transaction ? 'Actualizar' : 'Agregar'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ===== BUDGET MODAL =====
-function BudgetModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  categories,
-  selectedMonth,
-  budget 
-}: { 
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (b: Omit<BudgetRow, 'id'>) => void;
-  categories: Category[];
-  selectedMonth: string;
-  budget: BudgetRow | null;
-}) {
-  const [formData, setFormData] = useState<Omit<BudgetRow, 'id'>>({
-    month: selectedMonth,
-    category: '',
-    budget: 0,
-    description: '',
-    installmentNumber: undefined,
-    installments: undefined,
-    paidAt: undefined,
-  });
-
-  useEffect(() => {
-    if (budget) {
-      setFormData(budget);
-    } else {
-      setFormData({
-        month: selectedMonth,
-        category: '',
-        budget: 0,
-        description: '',
-        installmentNumber: undefined,
-        installments: undefined,
-        paidAt: undefined,
-      });
-    }
-  }, [budget, selectedMonth, isOpen]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>
-            {budget ? 'Editar presupuesto' : 'Agregar presupuesto'}
-          </DialogTitle>
-          <DialogDescription>
-            Define el límite de gasto para una categoría
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="budget-category">Categoría</Label>
-            <Select 
-              value={formData.category} 
-              onValueChange={(value) => setFormData({ ...formData, category: value })}
-            >
-              <SelectTrigger id="budget-category">
-                <SelectValue placeholder="Selecciona una categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map(cat => (
-                  <SelectItem key={cat.name} value={cat.name}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="budget-amount">Presupuesto</Label>
-            <Input
-              id="budget-amount"
-              type="text"
-              inputMode="numeric"
-              value={formatNumberWithDots(formData.budget)}
-              onChange={(e) => setFormData({ ...formData, budget: parseNumberFromDots(e.target.value) })}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="budget-description">Descripción (opcional)</Label>
-            <Input
-              id="budget-description"
-              value={formData.description || ''}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Ej: Préstamo de la compu"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="budget-installment-number">Número de cuota actual (opcional)</Label>
-            <Input
-              id="budget-installment-number"
-              type="number"
-              min="1"
-              value={formData.installmentNumber || ''}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  installmentNumber: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
-              placeholder="Ej: 2"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="budget-installments">Número de cuotas (opcional)</Label>
-            <Input
-              id="budget-installments"
-              type="number"
-              min="1"
-              value={formData.installments || ''}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  installments: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
-              placeholder="Ej: 12"
-            />
-          </div>
-          
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">
-              {budget ? 'Actualizar' : 'Agregar'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ===== DEBT MODAL =====
-function DebtModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  debt 
-}: { 
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (d: Omit<Debt, 'id'>) => void;
-  debt: Debt | null;
-}) {
-  const [formData, setFormData] = useState<Omit<Debt, 'id'>>({
-    name: '',
-    balance: 0,
-    apr: undefined,
-    monthlyPayment: 0,
-    dueDay: 1,
-  });
-
-  useEffect(() => {
-    if (debt) {
-      setFormData(debt);
-    } else {
-      setFormData({
-        name: '',
-        balance: 0,
-        apr: undefined,
-        monthlyPayment: 0,
-        dueDay: 1,
-      });
-    }
-  }, [debt, isOpen]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>
-            {debt ? 'Editar deuda' : 'Agregar deuda'}
-          </DialogTitle>
-          <DialogDescription>
-            Registra los detalles de tu deuda
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="debt-name">Nombre</Label>
-            <Input
-              id="debt-name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="debt-balance">Balance total</Label>
-              <Input
-                id="debt-balance"
-                type="text"
-                inputMode="numeric"
-                value={formatNumberWithDots(formData.balance)}
-                onChange={(e) => setFormData({ ...formData, balance: parseNumberFromDots(e.target.value) })}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="debt-apr">APR % (opcional)</Label>
-              <Input
-                id="debt-apr"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.apr || ''}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  apr: e.target.value ? parseFloat(e.target.value) : undefined 
-                })}
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="debt-payment">Pago mensual</Label>
-              <Input
-                id="debt-payment"
-                type="text"
-                inputMode="numeric"
-                value={formatNumberWithDots(formData.monthlyPayment)}
-                onChange={(e) => setFormData({ ...formData, monthlyPayment: parseNumberFromDots(e.target.value) })}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="debt-due">Día de vencimiento</Label>
-              <Input
-                id="debt-due"
-                type="number"
-                min="1"
-                max="31"
-                value={formData.dueDay}
-                onChange={(e) => setFormData({ ...formData, dueDay: parseInt(e.target.value) })}
-                required
-              />
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">
-              {debt ? 'Actualizar' : 'Agregar'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ===== PAYOFF PLAN MODAL =====
-function PayoffPlanModal({ 
-  isOpen, 
-  onClose, 
-  debts,
-  currency
-}: { 
-  isOpen: boolean;
-  onClose: () => void;
-  debts: Debt[];
-  currency: string;
-}) {
-  const avalanche = useMemo(() => {
-    return [...debts]
-      .filter(d => d.apr !== undefined)
-      .sort((a, b) => (b.apr || 0) - (a.apr || 0));
-  }, [debts]);
-
-  const snowball = useMemo(() => {
-    return [...debts].sort((a, b) => a.balance - b.balance);
-  }, [debts]);
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Plan de Pago de Deudas</DialogTitle>
-          <DialogDescription>
-            Estrategias sugeridas para pagar tus deudas
-          </DialogDescription>
-        </DialogHeader>
-        
-        <Tabs defaultValue="avalanche" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="avalanche">Avalancha</TabsTrigger>
-            <TabsTrigger value="snowball">Bola de nieve</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="avalanche" className="space-y-4">
-            <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
-              <strong>Método Avalancha:</strong> Prioriza deudas con mayor tasa de interés (APR). 
-              Minimiza el interés total pagado.
-            </div>
-            
-            {avalanche.length === 0 ? (
-              <p className="text-center text-neutral-500 py-8">
-                No hay deudas con APR definido
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <h4 className="font-semibold">Orden sugerido de pago:</h4>
-                <ol className="space-y-2">
-                  {avalanche.map((debt, index) => (
-                    <li key={debt.id} className="flex items-start gap-3 p-3 rounded-lg bg-neutral-50">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">{debt.name}</div>
-                        <div className="text-sm text-neutral-600">
-                          Balance: {formatCurrency(debt.balance, currency)} • APR: {debt.apr}%
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="snowball" className="space-y-4">
-            <div className="rounded-lg bg-green-50 p-4 text-sm text-green-900">
-              <strong>Método Bola de nieve:</strong> Prioriza deudas con menor balance. 
-              Genera victorias rápidas y motivación psicológica.
-            </div>
-            
-            {snowball.length === 0 ? (
-              <p className="text-center text-neutral-500 py-8">
-                No hay deudas registradas
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <h4 className="font-semibold">Orden sugerido de pago:</h4>
-                <ol className="space-y-2">
-                  {snowball.map((debt, index) => (
-                    <li key={debt.id} className="flex items-start gap-3 p-3 rounded-lg bg-neutral-50">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-sm flex items-center justify-center">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">{debt.name}</div>
-                        <div className="text-sm text-neutral-600">
-                          Balance: {formatCurrency(debt.balance, currency)}
-                          {debt.apr && ` • APR: ${debt.apr}%`}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-        
-        <div className="rounded-lg bg-yellow-50 p-4 text-xs text-yellow-900">
-          <strong>Nota:</strong> Estas son sugerencias educativas, no asesoría financiera. 
-          Consulta con un profesional para tu situación específica.
-        </div>
-        
-        <DialogFooter>
-          <Button onClick={onClose}>Cerrar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ===== GOAL MODAL =====
-function GoalModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  goal,
-  currency
-}: { 
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (g: Omit<MonthlyGoal, 'id' | 'month'>) => void;
-  goal: MonthlyGoal | null;
-  currency: string;
-}) {
-  const [formData, setFormData] = useState({
-    savingsTarget: 0,
-    variableSpendingLimit: 0,
-    minimumDebtPayment: 0,
-  });
-
-  useEffect(() => {
-    if (goal) {
-      setFormData({
-        savingsTarget: goal.savingsTarget,
-        variableSpendingLimit: goal.variableSpendingLimit,
-        minimumDebtPayment: goal.minimumDebtPayment,
-      });
-    } else {
-      setFormData({
-        savingsTarget: 0,
-        variableSpendingLimit: 0,
-        minimumDebtPayment: 0,
-      });
-    }
-  }, [goal, isOpen]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
-  const getCurrencySymbol = (curr: string) => {
-    const symbols: Record<string, string> = {
-      EUR: '€', USD: '$', MXN: '$', ARS: '$', COP: '$',
-      CLP: '$', PEN: 'S/', PYG: '₲', GBP: '£'
-    };
-    return symbols[curr] || '$';
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Plan del Mes</DialogTitle>
-          <DialogDescription>
-            Configurá tus 3 metas principales para el mes
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium flex items-center gap-2">
-              <PiggyBank className="w-4 h-4 text-violet-600" />
-              Meta de ahorro ({getCurrencySymbol(currency)})
-            </label>
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={formatNumberWithDots(formData.savingsTarget)}
-              onChange={(e) => setFormData({ ...formData, savingsTarget: parseNumberFromDots(e.target.value) })}
-              placeholder="¿Cuánto querés ahorrar este mes?"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-rose-600" />
-              Tope de gastos variables ({getCurrencySymbol(currency)})
-            </label>
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={formatNumberWithDots(formData.variableSpendingLimit)}
-              onChange={(e) => setFormData({ ...formData, variableSpendingLimit: parseNumberFromDots(e.target.value) })}
-              placeholder="Límite para gastos no esenciales"
-            />
-            <p className="text-xs text-neutral-500">
-              Gastos como restaurantes, entretenimiento, compras, etc.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-orange-600" />
-              Pago mínimo de deudas ({getCurrencySymbol(currency)})
-            </label>
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={formatNumberWithDots(formData.minimumDebtPayment)}
-              onChange={(e) => setFormData({ ...formData, minimumDebtPayment: parseNumberFromDots(e.target.value) })}
-              placeholder="Monto mínimo a pagar en deudas"
-            />
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
-            💡 <strong>Tip:</strong> Estas metas te ayudan a tener un plan claro cada mes. 
-            Revisalas y ajustalas según tus ingresos y prioridades.
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">
-              Guardar
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ===== QUICK ADD MODAL =====
-function QuickAddModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  categories 
-}: { 
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (t: Omit<Transaction, 'id'>) => void;
-  categories: Category[];
-}) {
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [type, setType] = useState<'Income' | 'Expense'>('Expense');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || !category) {
-      toast.error('Monto y categoría son requeridos');
-      return;
-    }
-    
-    onSave({
-      date: new Date().toISOString().split('T')[0],
-      description: category, // Use category as description for quick add
-      category,
-      type,
-      account: 'Cash',
-      amount: parseNumberFromDots(amount),
-      tags: [],
-      notes: '',
-    });
-    
-    // Reset form
-    setAmount('');
-    setCategory('');
-    setType('Expense');
-    onClose();
-  };
-
-  // Reset on open
-  useEffect(() => {
-    if (isOpen) {
-      setAmount('');
-      setCategory('');
-      setType('Expense');
-    }
-  }, [isOpen]);
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[400px]">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-blue-600" />
-            <DialogTitle>Quick Add</DialogTitle>
-          </div>
-          <DialogDescription>
-            Agregar movimiento rápido de hoy
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-900">
-              {new Date().toLocaleDateString('es-ES', { 
-                weekday: 'long', 
-                day: 'numeric', 
-                month: 'long' 
-              })}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant={type === 'Expense' ? 'default' : 'outline'}
-              className={type === 'Expense' ? 'bg-rose-600 hover:bg-rose-700' : ''}
-              onClick={() => setType('Expense')}
-            >
-              <TrendingDown className="w-4 h-4 mr-2" />
-              Gasto
-            </Button>
-            <Button
-              type="button"
-              variant={type === 'Income' ? 'default' : 'outline'}
-              className={type === 'Income' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-              onClick={() => setType('Income')}
-            >
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Ingreso
-            </Button>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="quick-amount">Monto</Label>
-            <Input
-              id="quick-amount"
-              type="text"
-              inputMode="numeric"
-              value={amount}
-              onChange={(e) => setAmount(formatNumberWithDots(parseNumberFromDots(e.target.value)))}
-              placeholder="0.00"
-              autoFocus
-              className="text-2xl font-semibold h-14"
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="quick-category">Categoría</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger id="quick-category">
-                <SelectValue placeholder="Seleccionar…" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories
-                  .filter(cat => type === 'Expense' ? true : cat.name === 'Salario' || cat.name === 'Freelance')
-                  .map(cat => (
-                    <SelectItem key={cat.name} value={cat.name}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-              <Zap className="w-4 h-4 mr-2" />
-              Agregar
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }

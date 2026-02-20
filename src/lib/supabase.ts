@@ -2,8 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 
 const env = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env;
 
-const configuredSupabaseUrl = env.VITE_SUPABASE_URL;
-const configuredSupabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
+const normalizeEnvValue = (value: string | undefined) => value?.trim();
+const parseEnvBoolean = (value: string | undefined) => {
+  const normalized = normalizeEnvValue(value)?.toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
+};
+
+const configuredSupabaseUrl = normalizeEnvValue(env.VITE_SUPABASE_URL);
+const configuredSupabaseAnonKey = normalizeEnvValue(env.VITE_SUPABASE_ANON_KEY);
 
 export const isSupabaseConfigured = Boolean(configuredSupabaseUrl && configuredSupabaseAnonKey);
 
@@ -18,5 +24,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export const isGithubOAuthEnabled = env.VITE_SUPABASE_GITHUB_ENABLED === 'true';
-export const isGoogleOAuthEnabled = env.VITE_SUPABASE_GOOGLE_ENABLED === 'true';
+export const isGithubOAuthEnabled = parseEnvBoolean(env.VITE_SUPABASE_GITHUB_ENABLED);
+export const isGoogleOAuthEnabled = parseEnvBoolean(env.VITE_SUPABASE_GOOGLE_ENABLED);
