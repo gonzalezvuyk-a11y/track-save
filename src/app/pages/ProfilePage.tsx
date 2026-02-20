@@ -99,7 +99,6 @@ export default function ProfilePage() {
       full_name: parsed.data.full_name,
       currency: parsed.data.currency,
       monthly_income: parsed.data.monthly_income,
-      role,
     });
 
     setSaving(false);

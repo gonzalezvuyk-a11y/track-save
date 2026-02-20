@@ -145,7 +145,7 @@ const DEFAULT_BUDGETS = (month: string): BudgetRow[] => [
   { id: crypto.randomUUID(), month, category: 'Renta', budget: 0 },
   { id: crypto.randomUUID(), month, category: 'Servicios', budget: 0 },
   { id: crypto.randomUUID(), month, category: 'Supermercado', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Transporte', budget: 0 },
+  { id: crypto.randomUUID(), month, category: 'Transporte (Bolt/Uber)', budget: 0 },
   { id: crypto.randomUUID(), month, category: 'Suscripciones', budget: 0 },
   { id: crypto.randomUUID(), month, category: 'Salud', budget: 0 },
   { id: crypto.randomUUID(), month, category: 'Restaurantes', budget: 0 },
@@ -266,6 +266,14 @@ const detectSubscriptions = (transactions: Transaction[]): Subscription[] => {
 
 const getMonthFromDate = (date: string) => {
   return date.substring(0, 7); // YYYY-MM
+};
+
+const getDefaultDateForMonth = (month: string) => {
+  const currentMonth = getCurrentMonth();
+  if (month === currentMonth) {
+    return new Date().toISOString().split('T')[0];
+  }
+  return `${month}-01`;
 };
 
 const getBudgetPaymentDate = (month: string) => {
@@ -2328,6 +2336,7 @@ export default function App() {
           : handleAddTransaction
         }
         categories={categories}
+        selectedMonth={selectedMonth}
         transaction={editingTransaction}
         availableTags={availableTags}
         onAddTag={(tag) => {
@@ -2416,6 +2425,7 @@ function TransactionModal({
   onClose, 
   onSave, 
   categories, 
+  selectedMonth,
   transaction,
   availableTags,
   onAddTag
@@ -2424,12 +2434,13 @@ function TransactionModal({
   onClose: () => void;
   onSave: (t: Omit<Transaction, 'id'>) => void;
   categories: Category[];
+  selectedMonth: string;
   transaction: Transaction | null;
   availableTags: string[];
   onAddTag: (tag: string) => void;
 }) {
   const [formData, setFormData] = useState<Omit<Transaction, 'id'>>({
-    date: new Date().toISOString().split('T')[0],
+    date: getDefaultDateForMonth(selectedMonth),
     description: '',
     category: '',
     type: 'Expense',
@@ -2444,7 +2455,7 @@ function TransactionModal({
       setFormData(transaction);
     } else {
       setFormData({
-        date: new Date().toISOString().split('T')[0],
+        date: getDefaultDateForMonth(selectedMonth),
         description: '',
         category: '',
         type: 'Expense',
@@ -2454,7 +2465,7 @@ function TransactionModal({
         notes: '',
       });
     }
-  }, [transaction, isOpen]);
+  }, [transaction, isOpen, selectedMonth]);
 
   const [newTag, setNewTag] = useState('');
 
@@ -2475,6 +2486,22 @@ function TransactionModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.category.trim()) {
+      toast.error('Selecciona una categoría');
+      return;
+    }
+
+    if (!formData.description.trim()) {
+      toast.error('La descripción es requerida');
+      return;
+    }
+
+    if (!formData.amount || formData.amount <= 0) {
+      toast.error('El monto debe ser mayor a 0');
+      return;
+    }
+
     onSave(formData);
   };
 

@@ -116,7 +116,14 @@ using (
   )
 )
 with check (
-  auth.uid() = id
+  (
+    auth.uid() = id
+    and role = (
+      select p_self.role
+      from public.profiles p_self
+      where p_self.id = auth.uid()
+    )
+  )
   or exists (
     select 1
     from public.profiles p
