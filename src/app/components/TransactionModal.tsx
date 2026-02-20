@@ -23,7 +23,7 @@ type Transaction = {
   description: string;
   category: string;
   type: 'Income' | 'Expense';
-  account: 'Cash' | 'Bank' | 'Card';
+  account: string;
   amount: number;
   tags?: string[];
   notes?: string;
@@ -40,7 +40,9 @@ export function TransactionModal({
   categories,
   selectedMonth,
   transaction,
+  accounts,
   availableTags,
+  onAddAccount,
   onAddTag,
 }: {
   isOpen: boolean;
@@ -49,7 +51,9 @@ export function TransactionModal({
   categories: Category[];
   selectedMonth: string;
   transaction: Transaction | null;
+  accounts: string[];
   availableTags: string[];
+  onAddAccount: (account: string) => void;
   onAddTag: (tag: string) => void;
 }) {
   const [formData, setFormData] = useState<Omit<Transaction, 'id'>>({
@@ -81,6 +85,18 @@ export function TransactionModal({
   }, [transaction, isOpen, selectedMonth]);
 
   const [newTag, setNewTag] = useState('');
+  const [newAccount, setNewAccount] = useState('');
+
+  const handleAddAccountToList = () => {
+    const account = newAccount.trim();
+    if (!account) {
+      return;
+    }
+
+    onAddAccount(account);
+    setFormData({ ...formData, account });
+    setNewAccount('');
+  };
 
   const handleAddTagToTransaction = () => {
     if (newTag.trim()) {
@@ -183,17 +199,35 @@ export function TransactionModal({
               <Label htmlFor="account">Cuenta</Label>
               <Select
                 value={formData.account}
-                onValueChange={(value: 'Cash' | 'Bank' | 'Card') => setFormData({ ...formData, account: value })}
+                onValueChange={(value) => setFormData({ ...formData, account: value })}
               >
                 <SelectTrigger id="account">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Cash">Efectivo</SelectItem>
-                  <SelectItem value="Bank">Banco</SelectItem>
-                  <SelectItem value="Card">Tarjeta</SelectItem>
+                  {accounts.map((account) => (
+                    <SelectItem key={account} value={account}>
+                      {account === 'Cash' ? 'Efectivo' : account === 'Bank' ? 'Banco' : account === 'Card' ? 'Tarjeta' : account}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              <div className="flex gap-2 pt-2">
+                <Input
+                  value={newAccount}
+                  onChange={(e) => setNewAccount(e.target.value)}
+                  placeholder="Nueva cuenta (ej: Itaú, Ueno)"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddAccountToList();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" onClick={handleAddAccountToList}>
+                  Agregar
+                </Button>
+              </div>
             </div>
           </div>
 

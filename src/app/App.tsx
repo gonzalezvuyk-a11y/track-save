@@ -59,7 +59,7 @@ interface Transaction {
   description: string;
   category: string;
   type: 'Income' | 'Expense';
-  account: 'Cash' | 'Bank' | 'Card';
+  account: string;
   amount: number;
   tags?: string[];
   notes?: string;
@@ -180,6 +180,8 @@ const DEFAULT_DEBTS: Debt[] = [
   { id: crypto.randomUUID(), name: 'Tarjeta de Crédito', balance: 0, monthlyPayment: 0, dueDay: 10 },
   { id: crypto.randomUUID(), name: 'Préstamo', balance: 0, monthlyPayment: 0, dueDay: 25 },
 ];
+
+const DEFAULT_ACCOUNTS = ['Cash', 'Bank', 'Card'];
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -306,6 +308,7 @@ export default function App() {
   const [monthlyGoals, setMonthlyGoals] = useState<MonthlyGoal[]>([]);
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>(['Trabajo', 'Personal', 'Viaje', 'Familia']);
+  const [accounts, setAccounts] = useState<string[]>(DEFAULT_ACCOUNTS);
   const [isDarkMode, setIsDarkMode] = useState(false);
   
   // Behavioral features
@@ -347,6 +350,7 @@ export default function App() {
     const savedGoals = localStorage.getItem('finance-goals');
     const savedRules = localStorage.getItem('finance-rules');
     const savedTags = localStorage.getItem('finance-tags');
+    const savedAccounts = localStorage.getItem('finance-accounts');
     const savedCardDiet = localStorage.getItem('finance-card-diet');
     const savedWeeklyBudgets = localStorage.getItem('finance-weekly-budgets');
     const savedSubscriptions = localStorage.getItem('finance-subscriptions');
@@ -390,6 +394,11 @@ export default function App() {
       setCategoryRules(defaultRules);
     }
     if (savedTags) setAvailableTags(JSON.parse(savedTags));
+    if (savedAccounts) {
+      const parsedAccounts = JSON.parse(savedAccounts) as string[];
+      const mergedAccounts = Array.from(new Set([...DEFAULT_ACCOUNTS, ...parsedAccounts]));
+      setAccounts(mergedAccounts);
+    }
     if (savedCardDiet) setCardDietMode(JSON.parse(savedCardDiet));
     if (savedWeeklyBudgets) setWeeklyBudgets(JSON.parse(savedWeeklyBudgets));
     if (savedSubscriptions) setSubscriptions(JSON.parse(savedSubscriptions));
@@ -441,6 +450,10 @@ export default function App() {
   }, [availableTags]);
 
   useEffect(() => {
+    localStorage.setItem('finance-accounts', JSON.stringify(accounts));
+  }, [accounts]);
+
+  useEffect(() => {
     localStorage.setItem('finance-card-diet', JSON.stringify(cardDietMode));
   }, [cardDietMode]);
 
@@ -477,6 +490,11 @@ export default function App() {
     months.add(getCurrentMonth());
     return Array.from(months).sort().reverse();
   }, [transactions, budgets, monthlyGoals, customMonths]);
+
+  const availableAccounts = useMemo(() => {
+    const fromTransactions = transactions.map((transaction) => transaction.account);
+    return Array.from(new Set([...DEFAULT_ACCOUNTS, ...accounts, ...fromTransactions]));
+  }, [accounts, transactions]);
 
   const ensureMonthAvailable = (month: string) => {
     setCustomMonths(prev => (prev.includes(month) ? prev : [...prev, month]));
@@ -1970,9 +1988,11 @@ export default function App() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="Cash">Efectivo</SelectItem>
-                    <SelectItem value="Bank">Banco</SelectItem>
-                    <SelectItem value="Card">Tarjeta</SelectItem>
+                    {availableAccounts.map((account) => (
+                      <SelectItem key={account} value={account}>
+                        {account === 'Cash' ? 'Efectivo' : account === 'Bank' ? 'Banco' : account === 'Card' ? 'Tarjeta' : account}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 
@@ -2340,7 +2360,15 @@ export default function App() {
           categories={categories}
           selectedMonth={selectedMonth}
           transaction={editingTransaction}
+          accounts={availableAccounts}
           availableTags={availableTags}
+          onAddAccount={(account) => {
+            if (!account.trim()) {
+              return;
+            }
+
+            setAccounts((prev) => (prev.includes(account) ? prev : [...prev, account]));
+          }}
           onAddTag={(tag) => {
             if (!availableTags.includes(tag)) {
               setAvailableTags([...availableTags, tag]);
