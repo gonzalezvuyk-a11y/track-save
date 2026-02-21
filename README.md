@@ -74,6 +74,24 @@ Opcional Google OAuth:
 npm run dev
 ```
 
+## 5.1) Migraciones SQL seguras (sin exponer password)
+
+1. Copia `.env.db.example` a `.env.db.local`.
+2. Reemplaza `[YOUR-PASSWORD]` con la contraseña real de tu DB de Supabase.
+3. Ejecuta migraciones remotas con:
+
+```bash
+npm run db:push
+```
+
+Opcional (peligroso, resetea DB remota):
+
+```bash
+npm run db:reset:remote
+```
+
+` .env.db.local` está ignorado en git para no versionar secretos.
+
 ## 6) Deploy en Vercel
 
 1. Importa el repo en Vercel.

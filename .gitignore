@@ -2,5 +2,6 @@ node_modules
 dist
 .env
 .env.local
+.env.db.local
 .DS_Store
 supabase/.temp

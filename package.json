@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "db:push": "bash -lc 'source .env.db.local && supabase db push --db-url \"$SUPABASE_DB_URL\"'",
+    "db:reset:remote": "bash -lc 'source .env.db.local && supabase db reset --db-url \"$SUPABASE_DB_URL\"'"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "1.2.3",
