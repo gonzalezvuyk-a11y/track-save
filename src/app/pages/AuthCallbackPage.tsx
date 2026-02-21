@@ -10,6 +10,37 @@ export default function AuthCallbackPage() {
     let active = true;
 
     const finishOAuth = async () => {
+      const query = new URLSearchParams(window.location.search);
+      const authCode = query.get('code');
+      const authError = query.get('error');
+      const authErrorDescription = query.get('error_description');
+
+      if (authError) {
+        const message = authErrorDescription
+          ? decodeURIComponent(authErrorDescription.replace(/\+/g, ' '))
+          : 'No se pudo completar el inicio de sesión con Google.';
+        toast.error(message);
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      if (authCode) {
+        const { error } = await supabase.auth.exchangeCodeForSession(authCode);
+
+        if (!active) {
+          return;
+        }
+
+        if (error) {
+          toast.error(error.message);
+          navigate('/login', { replace: true });
+          return;
+        }
+
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+
       const { data, error } = await supabase.auth.getSession();
 
       if (!active) {
@@ -27,26 +58,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-        if (!active) {
-          return;
-        }
-
-        if (nextSession) {
-          navigate('/dashboard', { replace: true });
-        } else {
-          navigate('/login', { replace: true });
-        }
-      });
-
-      setTimeout(() => {
-        subscription.unsubscribe();
-        if (active) {
-          navigate('/login', { replace: true });
-        }
-      }, 3000);
+      navigate('/login', { replace: true });
     };
 
     finishOAuth();
