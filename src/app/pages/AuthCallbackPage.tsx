@@ -11,9 +11,16 @@ export default function AuthCallbackPage() {
 
     const finishOAuth = async () => {
       const query = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+      const hashParams = new URLSearchParams(hash);
       const authCode = query.get('code');
-      const authError = query.get('error');
-      const authErrorDescription = query.get('error_description');
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const authError = query.get('error') ?? hashParams.get('error');
+      const authErrorDescription =
+        query.get('error_description') ?? hashParams.get('error_description');
 
       if (authError) {
         const message = authErrorDescription
@@ -37,6 +44,27 @@ export default function AuthCallbackPage() {
           return;
         }
 
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        if (error) {
+          toast.error(error.message);
+          navigate('/login', { replace: true });
+          return;
+        }
+
+        window.history.replaceState(null, '', window.location.pathname);
         navigate('/dashboard', { replace: true });
         return;
       }
