@@ -194,8 +194,15 @@ export default function RegisterPage() {
       </form>
 
       {isGoogleOAuthEnabled ? (
-        <Button variant="outline" className="w-full" onClick={() => signUpWithProvider('google')}>
-          Registrarme con Google
+        <Button
+          variant="outline"
+          className="w-full justify-center gap-2"
+          onClick={() => signUpWithProvider('google')}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+            <path d="M12.24 10.285V14.4h6.806c-.275 1.764-2.067 5.173-6.806 5.173-4.096 0-7.434-3.39-7.434-7.573s3.338-7.573 7.434-7.573c2.334 0 3.9.993 4.8 1.849l3.271-3.117C18.218 1.282 15.527 0 12.24 0 5.61 0 .239 5.371.239 12s5.37 12 12.001 12c6.928 0 11.52-4.87 11.52-11.726 0-.788-.085-1.389-.189-1.99H12.24z" />
+          </svg>
+          <span>Registrarme con Google</span>
         </Button>
       ) : null}
 
