@@ -9,6 +9,28 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     let active = true;
 
+    const waitForSession = async () => {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session) {
+          return true;
+        }
+
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, 250);
+        });
+      }
+
+      return false;
+    };
+
+    const clearAuthParamsFromUrl = () => {
+      window.history.replaceState(null, '', window.location.pathname);
+    };
+
     const finishOAuth = async () => {
       const query = new URLSearchParams(window.location.search);
       const hash = window.location.hash.startsWith('#')
@@ -44,6 +66,19 @@ export default function AuthCallbackPage() {
           return;
         }
 
+        clearAuthParamsFromUrl();
+        const hasSession = await waitForSession();
+
+        if (!active) {
+          return;
+        }
+
+        if (!hasSession) {
+          toast.error('Google autenticó, pero no se pudo crear sesión local. Intenta nuevamente.');
+          navigate('/login', { replace: true });
+          return;
+        }
+
         navigate('/dashboard', { replace: true });
         return;
       }
@@ -64,7 +99,19 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        window.history.replaceState(null, '', window.location.pathname);
+        clearAuthParamsFromUrl();
+        const hasSession = await waitForSession();
+
+        if (!active) {
+          return;
+        }
+
+        if (!hasSession) {
+          toast.error('Google autenticó, pero no se pudo crear sesión local. Intenta nuevamente.');
+          navigate('/login', { replace: true });
+          return;
+        }
+
         navigate('/dashboard', { replace: true });
         return;
       }
