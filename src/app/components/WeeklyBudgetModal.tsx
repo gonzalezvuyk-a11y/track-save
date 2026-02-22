@@ -83,7 +83,7 @@ export function WeeklyBudgetModal({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-600" />
+            <Calendar className="w-5 h-5 text-primary" />
             <DialogTitle>Presupuesto Semanal</DialogTitle>
           </div>
           <DialogDescription>
@@ -123,8 +123,8 @@ export function WeeklyBudgetModal({
             />
           </div>
 
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs text-blue-900">
+          <div className="p-3 bg-sky-50 rounded-lg border border-sky-200">
+            <p className="text-xs text-sky-900">
               <strong>Consejo:</strong> Configura límites para categorías donde gastas más frecuentemente 
               (Delivery, Transporte, etc.) para controlar micro-gastos.
             </p>

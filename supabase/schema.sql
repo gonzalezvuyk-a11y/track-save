@@ -7,6 +7,7 @@ create table if not exists public.profiles (
   full_name text not null default '',
   currency text not null default 'PYG' check (currency in ('PYG', 'USD')),
   monthly_income numeric(14, 2) null check (monthly_income is null or monthly_income >= 0),
+  income_type text not null default 'fixed' check (income_type in ('fixed', 'freelance')),
   role text not null default 'user' check (role in ('user', 'admin')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -56,7 +57,7 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, full_name, currency, monthly_income, role)
+  insert into public.profiles (id, full_name, currency, monthly_income, income_type, role)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
@@ -65,6 +66,7 @@ begin
       when new.raw_user_meta_data->>'monthly_income' is null then null
       else (new.raw_user_meta_data->>'monthly_income')::numeric
     end,
+    coalesce(new.raw_user_meta_data->>'income_type', 'fixed'),
     'user'
   )
   on conflict (id) do nothing;

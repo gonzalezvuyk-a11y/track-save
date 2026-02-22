@@ -12,6 +12,7 @@ export const registerSchema = z
     password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
     confirmPassword: z.string(),
     currency: z.enum(['PYG', 'USD']),
+    incomeType: z.enum(['fixed', 'freelance']),
     monthlyIncome: z
       .string()
       .trim()
@@ -48,6 +49,7 @@ export const resetSchema = z
 export const profileSchema = z.object({
   full_name: z.string().trim().min(2, 'Nombre completo requerido'),
   currency: z.enum(['PYG', 'USD']),
+  income_type: z.enum(['fixed', 'freelance']),
   monthly_income: z
     .string()
     .trim()

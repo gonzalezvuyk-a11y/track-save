@@ -84,6 +84,14 @@ npm run dev
 npm run db:push
 ```
 
+Para aplicar específicamente los cambios de sueldo automático + tipo de ingreso (`income_type`):
+
+```bash
+npm run db:migrate:income-type
+```
+
+Este comando aplica la migración `supabase/migrations/20260222120000_add_income_type_to_profiles.sql` junto con cualquier migración pendiente.
+
 Opcional (peligroso, resetea DB remota):
 
 ```bash

@@ -5,7 +5,7 @@ import {
   Copy, Calculator, DollarSign, BarChart as BarChartIcon,
   Target, Calendar, Zap, Tag, StickyNote, Check, X, Bell, AlertCircle,
   ShieldOff, ShieldCheck, Repeat, Clock, Ban, Play, Pause, Moon, Sun,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MoreHorizontal
 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
 import { Badge } from './components/ui/badge';
 import { Progress } from './components/ui/progress';
@@ -20,7 +21,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Switch } from './components/ui/switch';
 import { toast } from 'sonner';
 import { Toaster } from './components/ui/sonner';
+import { useAuth } from './auth/AuthProvider';
 import { formatCurrency, getCurrentMonth, getDefaultDateForMonth } from './lib/finance';
+import { supabase } from '../lib/supabase';
 
 const TransactionModal = lazy(() =>
   import('./components/TransactionModal').then((module) => ({ default: module.TransactionModal })),
@@ -51,6 +54,11 @@ const MonthlyIncomeExpenseChart = lazy(() =>
     default: module.MonthlyIncomeExpenseChart,
   })),
 );
+const StatementImportModal = lazy(() =>
+  import('./components/StatementImportModal').then((module) => ({
+    default: module.StatementImportModal,
+  })),
+);
 
 // ===== TYPES =====
 interface Transaction {
@@ -69,11 +77,13 @@ interface Category {
   name: string;
   group: 'Fixed' | 'Variable' | 'Savings' | 'Debt';
   essential: boolean;
+  type: 'Income' | 'Expense';
 }
 
 interface BudgetRow {
   id: string;
   month: string; // YYYY-MM
+  type: 'Income' | 'Expense';
   category: string;
   budget: number;
   description?: string;
@@ -136,26 +146,49 @@ interface PaymentReminder {
   amount?: number;
 }
 
+type IncomeType = 'fixed' | 'freelance';
+
+type ProfileIncomeSettings = {
+  monthly_income: number | null;
+  income_type: IncomeType;
+  effective_from_month: string;
+};
+
+const isMissingIncomeTypeColumnError = (error: { code?: string; message?: string } | null | undefined) =>
+  Boolean(
+    error &&
+      (error.code === '42703' ||
+        error.message?.toLowerCase().includes('income_type') ||
+        error.message?.toLowerCase().includes('column profiles.income_type does not exist')),
+  );
+
 // ===== DEFAULT DATA =====
 const DEFAULT_CATEGORIES: Category[] = [
-  { name: 'Renta', group: 'Fixed', essential: true },
-  { name: 'Servicios', group: 'Fixed', essential: true },
-  { name: 'Combustible', group: 'Fixed', essential: true },
-  { name: 'Supermercado', group: 'Variable', essential: true },
-  { name: 'Minimarket', group: 'Variable', essential: false },
-  { name: 'Delivery', group: 'Variable', essential: false },
-  { name: 'Transporte (Bolt/Uber)', group: 'Variable', essential: false },
-  { name: 'Suscripciones', group: 'Variable', essential: false },
-  { name: 'Salud', group: 'Variable', essential: true },
-  { name: 'Restaurantes', group: 'Variable', essential: false },
-  { name: 'Entretenimiento', group: 'Variable', essential: false },
-  { name: 'Salario', group: 'Fixed', essential: true },
-  { name: 'Freelance', group: 'Variable', essential: false },
-  { name: 'Fondo de Emergencia', group: 'Savings', essential: true },
-  { name: 'Inversión', group: 'Savings', essential: false },
-  { name: 'Tarjeta de Crédito', group: 'Debt', essential: true },
-  { name: 'Préstamo', group: 'Debt', essential: true },
+  { name: 'Renta', group: 'Fixed', essential: true, type: 'Expense' },
+  { name: 'Servicios', group: 'Fixed', essential: true, type: 'Expense' },
+  { name: 'Combustible', group: 'Fixed', essential: true, type: 'Expense' },
+  { name: 'Supermercado', group: 'Variable', essential: true, type: 'Expense' },
+  { name: 'Minimarket', group: 'Variable', essential: false, type: 'Expense' },
+  { name: 'Delivery', group: 'Variable', essential: false, type: 'Expense' },
+  { name: 'Transporte (Bolt/Uber)', group: 'Variable', essential: false, type: 'Expense' },
+  { name: 'Suscripciones', group: 'Variable', essential: false, type: 'Expense' },
+  { name: 'Salud', group: 'Variable', essential: true, type: 'Expense' },
+  { name: 'Restaurantes', group: 'Variable', essential: false, type: 'Expense' },
+  { name: 'Entretenimiento', group: 'Variable', essential: false, type: 'Expense' },
+  { name: 'Salario', group: 'Fixed', essential: true, type: 'Income' },
+  { name: 'Freelance', group: 'Variable', essential: false, type: 'Income' },
+  { name: 'Fondo de Emergencia', group: 'Savings', essential: true, type: 'Expense' },
+  { name: 'Inversión', group: 'Savings', essential: false, type: 'Expense' },
+  { name: 'Tarjeta de Crédito', group: 'Debt', essential: true, type: 'Expense' },
+  { name: 'Préstamo', group: 'Debt', essential: true, type: 'Expense' },
 ];
+
+const DEFAULT_INCOME_CATEGORY_NAMES = new Set(
+  DEFAULT_CATEGORIES.filter((category) => category.type === 'Income').map((category) => category.name),
+);
+
+const inferCategoryType = (categoryName: string): 'Income' | 'Expense' =>
+  DEFAULT_INCOME_CATEGORY_NAMES.has(categoryName) ? 'Income' : 'Expense';
 
 const shiftMonth = (month: string, delta: number) => {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -165,15 +198,15 @@ const shiftMonth = (month: string, delta: number) => {
 };
 
 const DEFAULT_BUDGETS = (month: string): BudgetRow[] => [
-  { id: crypto.randomUUID(), month, category: 'Renta', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Servicios', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Supermercado', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Transporte (Bolt/Uber)', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Suscripciones', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Salud', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Restaurantes', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Fondo de Emergencia', budget: 0 },
-  { id: crypto.randomUUID(), month, category: 'Inversión', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Renta', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Servicios', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Supermercado', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Transporte (Bolt/Uber)', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Suscripciones', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Salud', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Restaurantes', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Fondo de Emergencia', budget: 0 },
+  { id: crypto.randomUUID(), month, type: 'Expense', category: 'Inversión', budget: 0 },
 ];
 
 const DEFAULT_DEBTS: Debt[] = [
@@ -269,6 +302,38 @@ const getMonthFromDate = (date: string) => {
   return date.substring(0, 7); // YYYY-MM
 };
 
+const AUTO_PROFILE_INCOME_TAG = 'auto-profile-income';
+
+const isAutoProfileIncomeTransaction = (transaction: Transaction) =>
+  transaction.tags?.includes(AUTO_PROFILE_INCOME_TAG) ?? false;
+
+const buildAutoProfileIncomeTransaction = (
+  month: string,
+  amount: number,
+  incomeType: IncomeType,
+  existingId?: string,
+): Transaction => ({
+  id: existingId ?? crypto.randomUUID(),
+  date: getDefaultDateForMonth(month),
+  description: incomeType === 'freelance' ? 'Ingreso mensual freelance (perfil)' : 'Ingreso mensual fijo (perfil)',
+  category: incomeType === 'freelance' ? 'Freelance' : 'Salario',
+  type: 'Income',
+  account: 'Bank',
+  amount,
+  tags: [AUTO_PROFILE_INCOME_TAG],
+  notes: 'Generado automáticamente desde tu perfil',
+});
+
+const hasSameAutoIncomeShape = (current: Transaction, next: Transaction) =>
+  current.date === next.date &&
+  current.description === next.description &&
+  current.category === next.category &&
+  current.type === next.type &&
+  current.account === next.account &&
+  current.amount === next.amount &&
+  current.notes === next.notes &&
+  JSON.stringify(current.tags ?? []) === JSON.stringify(next.tags ?? []);
+
 const getBudgetPaymentDate = (month: string) => {
   const currentMonth = getCurrentMonth();
   if (month === currentMonth) {
@@ -298,6 +363,7 @@ const normalizeBudgetInstallments = (budget: Omit<BudgetRow, 'id'>): Omit<Budget
 
 // ===== MAIN APP =====
 export default function App() {
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [budgets, setBudgets] = useState<BudgetRow[]>([]);
@@ -323,6 +389,10 @@ export default function App() {
   const [weeklyBudgets, setWeeklyBudgets] = useState<WeeklyBudget[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [paymentReminders, setPaymentReminders] = useState<PaymentReminder[]>([]);
+  const [showAdvancedSections, setShowAdvancedSections] = useState(false);
+  const [profileIncomeSettings, setProfileIncomeSettings] = useState<ProfileIncomeSettings | null | undefined>(
+    undefined,
+  );
   
   // Modal states
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -333,6 +403,7 @@ export default function App() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isWeeklyBudgetModalOpen, setIsWeeklyBudgetModalOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [isStatementImportOpen, setIsStatementImportOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingBudget, setEditingBudget] = useState<BudgetRow | null>(null);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
@@ -360,12 +431,31 @@ export default function App() {
     const savedReminders = localStorage.getItem('finance-reminders');
     const savedDarkMode = localStorage.getItem('finance-dark-mode');
     const savedCustomMonths = localStorage.getItem('finance-custom-months');
+    const savedShowAdvanced = localStorage.getItem('finance-show-advanced-sections');
 
     if (savedDarkMode) setIsDarkMode(JSON.parse(savedDarkMode));
     if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-    if (savedCategories) setCategories(JSON.parse(savedCategories));
+    if (savedCategories) {
+      const parsedCategories = JSON.parse(savedCategories) as Array<
+        Omit<Category, 'type'> & { type?: 'Income' | 'Expense' }
+      >;
+      setCategories(
+        parsedCategories.map((category) => ({
+          ...category,
+          type: category.type ?? inferCategoryType(category.name),
+        })),
+      );
+    }
     if (savedBudgets) {
-      setBudgets(JSON.parse(savedBudgets));
+      const parsedBudgets = JSON.parse(savedBudgets) as Array<
+        Omit<BudgetRow, 'type'> & { type?: 'Income' | 'Expense' }
+      >;
+      setBudgets(
+        parsedBudgets.map((budget) => ({
+          ...budget,
+          type: budget.type ?? inferCategoryType(budget.category),
+        })),
+      );
     } else {
       // Initialize with default budgets for current month
       setBudgets(DEFAULT_BUDGETS(getCurrentMonth()));
@@ -407,6 +497,7 @@ export default function App() {
     if (savedSubscriptions) setSubscriptions(JSON.parse(savedSubscriptions));
     if (savedReminders) setPaymentReminders(JSON.parse(savedReminders));
     if (savedCustomMonths) setCustomMonths(JSON.parse(savedCustomMonths));
+    if (savedShowAdvanced) setShowAdvancedSections(JSON.parse(savedShowAdvanced));
   }, []);
 
   // Dark mode effect
@@ -476,6 +567,72 @@ export default function App() {
     localStorage.setItem('finance-custom-months', JSON.stringify(customMonths));
   }, [customMonths]);
 
+  useEffect(() => {
+    localStorage.setItem('finance-show-advanced-sections', JSON.stringify(showAdvancedSections));
+  }, [showAdvancedSections]);
+
+  useEffect(() => {
+    if (!user) {
+      setProfileIncomeSettings(null);
+      return;
+    }
+
+    let isActive = true;
+
+    const loadProfileIncomeSettings = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('monthly_income, income_type, updated_at')
+        .eq('id', user.id)
+        .single();
+
+      if (!isActive) {
+        return;
+      }
+
+      if (error) {
+        if (isMissingIncomeTypeColumnError(error)) {
+          const { data: legacyData, error: legacyError } = await supabase
+            .from('profiles')
+            .select('monthly_income, updated_at')
+            .eq('id', user.id)
+            .single();
+
+          if (legacyError) {
+            toast.error(legacyError.message);
+            setProfileIncomeSettings(null);
+            return;
+          }
+
+          setProfileIncomeSettings({
+            monthly_income: legacyData?.monthly_income ?? null,
+            income_type: 'fixed',
+            effective_from_month: legacyData?.updated_at
+              ? getMonthFromDate(String(legacyData.updated_at))
+              : getCurrentMonth(),
+          });
+          return;
+        }
+
+        toast.error(error.message);
+        setProfileIncomeSettings(null);
+        return;
+      }
+
+      setProfileIncomeSettings({
+        monthly_income: data?.monthly_income ?? null,
+        income_type: (data?.income_type ?? 'fixed') as IncomeType,
+        effective_from_month: data?.updated_at ? getMonthFromDate(String(data.updated_at)) : getCurrentMonth(),
+      });
+    };
+
+    loadProfileIncomeSettings();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user]);
+
   // Auto-detect subscriptions when transactions change
   useEffect(() => {
     const detected = detectSubscriptions(transactions);
@@ -498,6 +655,73 @@ export default function App() {
     const fromTransactions = transactions.map((transaction) => transaction.account);
     return Array.from(new Set([...DEFAULT_ACCOUNTS, ...accounts, ...fromTransactions]));
   }, [accounts, transactions]);
+
+  useEffect(() => {
+    if (profileIncomeSettings === undefined) {
+      return;
+    }
+
+    const effectiveFromMonth = profileIncomeSettings?.effective_from_month ?? getCurrentMonth();
+    const candidateMonths = Array.from(new Set([...availableMonths, selectedMonth, getCurrentMonth()]));
+
+    setTransactions((prev) => {
+      const nonAutoTransactions = prev.filter((transaction) => !isAutoProfileIncomeTransaction(transaction));
+      const autoTransactions = prev.filter((transaction) => isAutoProfileIncomeTransaction(transaction));
+
+      const groupedAutoByMonth = new Map<string, Transaction[]>();
+      autoTransactions.forEach((transaction) => {
+        const month = getMonthFromDate(transaction.date);
+        const existing = groupedAutoByMonth.get(month) ?? [];
+        existing.push(transaction);
+        groupedAutoByMonth.set(month, existing);
+      });
+
+      const monthsToSync = Array.from(new Set([...candidateMonths, ...groupedAutoByMonth.keys()]));
+      const desiredAutoTransactions: Transaction[] = [];
+      let hasChanges = false;
+
+      monthsToSync.forEach((month) => {
+        const currentForMonth = groupedAutoByMonth.get(month) ?? [];
+        const currentTransaction = currentForMonth[0];
+
+        if (currentForMonth.length > 1) {
+          hasChanges = true;
+        }
+
+        if (month < effectiveFromMonth) {
+          if (currentTransaction) {
+            desiredAutoTransactions.push(currentTransaction);
+          }
+          return;
+        }
+
+        if (!profileIncomeSettings || !profileIncomeSettings.monthly_income || profileIncomeSettings.monthly_income <= 0) {
+          if (currentTransaction) {
+            hasChanges = true;
+          }
+          return;
+        }
+
+        const desiredTransaction = buildAutoProfileIncomeTransaction(
+          month,
+          profileIncomeSettings.monthly_income as number,
+          profileIncomeSettings.income_type,
+          currentTransaction?.id,
+        );
+
+        if (!currentTransaction || !hasSameAutoIncomeShape(currentTransaction, desiredTransaction)) {
+          hasChanges = true;
+        }
+        desiredAutoTransactions.push(desiredTransaction);
+      });
+
+      if (!hasChanges) {
+        return prev;
+      }
+
+      return [...nonAutoTransactions, ...desiredAutoTransactions];
+    });
+  }, [availableMonths, profileIncomeSettings, selectedMonth]);
 
   const ensureMonthAvailable = (month: string) => {
     setCustomMonths(prev => (prev.includes(month) ? prev : [...prev, month]));
@@ -686,6 +910,49 @@ export default function App() {
     };
   }, [monthTransactions, categories, debts]);
 
+  const allMonthsOverview = useMemo(() => {
+    const savingsCategories = new Set(
+      categories.filter((category) => category.group === 'Savings').map((category) => category.name),
+    );
+
+    const totalsByMonth = transactions.reduce<
+      Record<string, { income: number; expenses: number; savings: number }>
+    >((acc, transaction) => {
+      const month = getMonthFromDate(transaction.date);
+      if (!acc[month]) {
+        acc[month] = { income: 0, expenses: 0, savings: 0 };
+      }
+
+      if (transaction.type === 'Income') {
+        acc[month].income += transaction.amount;
+      } else {
+        acc[month].expenses += transaction.amount;
+        if (savingsCategories.has(transaction.category)) {
+          acc[month].savings += transaction.amount;
+        }
+      }
+
+      return acc;
+    }, {});
+
+    return [...availableMonths]
+      .sort((a, b) => b.localeCompare(a))
+      .map((month) => {
+        const totals = totalsByMonth[month] || { income: 0, expenses: 0, savings: 0 };
+        const goal = monthlyGoals.find((item) => item.month === month) || null;
+        const balance = totals.income - totals.expenses;
+
+        return {
+          month,
+          income: totals.income,
+          expenses: totals.expenses,
+          savings: totals.savings,
+          balance,
+          hasGoal: Boolean(goal),
+        };
+      });
+  }, [availableMonths, categories, monthlyGoals, transactions]);
+
   // Monthly goal for current month
   const currentGoal = useMemo(() => {
     return monthlyGoals.find(g => g.month === selectedMonth) || null;
@@ -739,7 +1006,7 @@ export default function App() {
       return acc;
     }, {} as Record<string, number>);
 
-    const maxCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
+    const maxCategory = (Object.entries(categoryTotals) as Array<[string, number]>).sort((a, b) => b[1] - a[1])[0];
     if (maxCategory) {
       insights.push(`Tu mayor gasto variable fue ${maxCategory[0]} (${formatCurrency(maxCategory[1], currency)})`);
     }
@@ -767,10 +1034,10 @@ export default function App() {
   const budgetStats = useMemo(() => {
     return monthBudgets.map(budget => {
       const spent = monthTransactions
-        .filter(t => t.type === 'Expense' && t.category === budget.category)
+        .filter(t => t.type === budget.type && t.category === budget.category)
         .reduce((sum, t) => sum + t.amount, 0);
       
-      const diff = budget.budget - spent;
+      const diff = budget.type === 'Income' ? spent - budget.budget : budget.budget - spent;
       const percentUsed = budget.budget > 0 ? (spent / budget.budget) * 100 : 0;
       
       return {
@@ -920,38 +1187,6 @@ export default function App() {
     };
   }, [monthTransactions]);
 
-  // Upcoming payment reminders (next 7 days)
-  const upcomingPayments = useMemo(() => {
-    const now = new Date();
-    const next7Days = new Date(now);
-    next7Days.setDate(now.getDate() + 7);
-    
-    const upcoming = paymentReminders
-      .filter(r => {
-        const dueDate = new Date(r.dueDate);
-        return dueDate >= now && dueDate <= next7Days;
-      })
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-    
-    // Add subscription reminders
-    subscriptions
-      .filter(s => s.status === 'active')
-      .forEach(sub => {
-        const nextDate = new Date(sub.nextEstimated);
-        if (nextDate >= now && nextDate <= next7Days) {
-          upcoming.push({
-            id: `sub-${sub.id}`,
-            title: `Suscripción: ${sub.merchant}`,
-            dueDate: sub.nextEstimated,
-            type: 'subscription',
-            amount: sub.amount,
-          });
-        }
-      });
-    
-    return upcoming;
-  }, [paymentReminders, subscriptions]);
-
   // ===== HANDLERS =====
   const handleAddTransaction = (transaction: Omit<Transaction, 'id'>) => {
     if (transaction.amount <= 0) {
@@ -981,6 +1216,7 @@ export default function App() {
         name: transaction.category,
         group: 'Variable',
         essential: false,
+        type: transaction.type,
       };
       setCategories([...categories, newCategory]);
       toast.info(`Categoría "${transaction.category}" creada automáticamente`);
@@ -1117,7 +1353,7 @@ export default function App() {
         ? `Pago presupuesto: ${description} (${installmentLabel})`
         : `Pago presupuesto: ${description}`,
       category: budgetRow.category,
-      type: 'Expense',
+      type: budgetRow.type,
       account: 'Bank',
       amount: budgetRow.budget,
       tags: ['Presupuesto'],
@@ -1136,7 +1372,7 @@ export default function App() {
       ),
     );
 
-    toast.success('Pago registrado y movimiento creado automáticamente');
+    toast.success('Presupuesto registrado y movimiento creado automáticamente');
   };
 
   const handleAddDebt = (debt: Omit<Debt, 'id'>) => {
@@ -1227,85 +1463,111 @@ export default function App() {
     toast.success('CSV exportado');
   };
 
-  const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split('\n');
-      const headers = lines[0].split(',');
-      
-      let imported = 0;
-      let errors = 0;
-      
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        
-        const values = line.split(',');
-        
-        try {
-          const transaction: Transaction = {
-            id: crypto.randomUUID(),
-            date: values[0],
-            description: values[1],
-            category: values[2],
-            type: values[3] as 'Income' | 'Expense',
-            account: values[4] as 'Cash' | 'Bank' | 'Card',
-            amount: parseFloat(values[5]),
-            notes: values[6] || '',
-            tags: values[7] ? values[7].split('|').filter(Boolean) : [],
-          };
-          
-          if (transaction.amount > 0 && transaction.date) {
-            setTransactions(prev => [...prev, transaction]);
-            imported++;
-          } else {
-            errors++;
-          }
-        } catch {
-          errors++;
-        }
+  const handleImportStatement = (importedTransactions: Omit<Transaction, 'id'>[]) => {
+    if (importedTransactions.length === 0) {
+      toast.info('No hay movimientos para importar');
+      return;
+    }
+
+    const existingKeys = new Set(
+      transactions.map((transaction) =>
+        `${transaction.date}|${transaction.description.trim().toLowerCase()}|${transaction.amount.toFixed(2)}|${transaction.type}`,
+      ),
+    );
+
+    const categoriesToCreate = new Map<string, 'Income' | 'Expense'>();
+    const monthsToEnsure = new Set<string>();
+    const deduplicatedTransactions: Transaction[] = [];
+    let duplicates = 0;
+
+    importedTransactions.forEach((transaction) => {
+      const key = `${transaction.date}|${transaction.description.trim().toLowerCase()}|${transaction.amount.toFixed(2)}|${transaction.type}`;
+      if (existingKeys.has(key)) {
+        duplicates++;
+        return;
       }
-      
-      if (imported > 0) {
-        toast.success(`${imported} movimientos importados`);
+
+      existingKeys.add(key);
+      monthsToEnsure.add(getMonthFromDate(transaction.date));
+      if (!categoriesToCreate.has(transaction.category)) {
+        categoriesToCreate.set(transaction.category, transaction.type);
       }
-      if (errors > 0) {
-        toast.error(`${errors} filas con errores`);
-      }
-    };
-    
-    reader.readAsText(file);
-    event.target.value = ''; // Reset input
+      deduplicatedTransactions.push({
+        ...transaction,
+        id: crypto.randomUUID(),
+      });
+    });
+
+    if (deduplicatedTransactions.length === 0) {
+      toast.info('No se importaron movimientos nuevos (todo era duplicado)');
+      return;
+    }
+
+    monthsToEnsure.forEach((month) => ensureMonthAvailable(month));
+
+    setCategories((prev) => {
+      const existingCategoryNames = new Set(prev.map((category) => category.name));
+      const missingCategories = Array.from(categoriesToCreate.entries())
+        .filter(([categoryName]) => !existingCategoryNames.has(categoryName))
+        .map(([categoryName, categoryType]) => ({
+          name: categoryName,
+          group: 'Variable' as const,
+          essential: false,
+          type: categoryType,
+        }));
+
+      return missingCategories.length > 0 ? [...prev, ...missingCategories] : prev;
+    });
+
+    setTransactions((prev) => [...prev, ...deduplicatedTransactions]);
+    toast.success(`${deduplicatedTransactions.length} movimientos importados`);
+
+    if (duplicates > 0) {
+      toast.info(`${duplicates} movimientos duplicados omitidos`);
+    }
   };
 
-  const chartData = [
-    {
-      name: 'Mes',
-      Ingresos: monthStats.income,
-      Gastos: monthStats.expenses,
-    },
-  ];
+  const chartData = useMemo(() => {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const dailyTotals = new Map<number, { income: number; expenses: number }>();
+
+    monthTransactions.forEach((transaction) => {
+      const day = Number(transaction.date.split('-')[2]);
+      const current = dailyTotals.get(day) ?? { income: 0, expenses: 0 };
+
+      if (transaction.type === 'Income') {
+        current.income += transaction.amount;
+      } else {
+        current.expenses += transaction.amount;
+      }
+
+      dailyTotals.set(day, current);
+    });
+
+    let runningBalance = 0;
+    return Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const totals = dailyTotals.get(day) ?? { income: 0, expenses: 0 };
+      runningBalance += totals.income - totals.expenses;
+
+      return {
+        day: String(day),
+        income: totals.income,
+        expenses: totals.expenses,
+        balance: runningBalance,
+      };
+    });
+  }, [monthTransactions, selectedMonth]);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 transition-colors duration-300">
+    <div className="min-h-screen bg-background p-4 md:p-8 transition-colors duration-300 animate-fade-in flex flex-col">
       <Toaster />
       
       {/* Top Bar */}
       <div className="max-w-[1440px] mx-auto mb-8">
-        <div className="glass-card rounded-3xl shadow-xl shadow-black/5 border border-border/50 p-8 backdrop-blur-xl">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div>
-                <img src="/track-save-logo.svg" alt="track&save" className="h-8 w-auto dark:hidden" />
-                <img src="/track-save-logo-negative.svg" alt="track&save" className="hidden h-8 w-auto dark:block" />
-                <p className="text-sm text-muted-foreground mt-0.5">Gestiona tus finanzas inteligentemente</p>
-              </div>
-            </div>
-            
+        <div className="glass-card rounded-3xl shadow-xl shadow-black/5 border border-border/50 p-8 backdrop-blur-xl animate-fade-up">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-start gap-6">
             <div className="flex flex-wrap items-center gap-3">
               {/* Dark Mode Toggle */}
               <Button
@@ -1315,9 +1577,9 @@ export default function App() {
                 className="rounded-full w-11 h-11 border-border/50 hover:border-primary/50 hover:bg-accent/50 transition-all"
               >
                 {isDarkMode ? (
-                  <Sun className="w-5 h-5 text-amber-500" />
+                  <Sun className="w-5 h-5 text-primary" />
                 ) : (
-                  <Moon className="w-5 h-5 text-slate-700" />
+                  <Moon className="w-5 h-5 text-muted-foreground" />
                 )}
               </Button>
               
@@ -1397,7 +1659,7 @@ export default function App() {
                   />
                   <Label htmlFor="card-diet" className="text-sm cursor-pointer flex items-center gap-1.5 font-medium">
                     {cardDietMode.enabled ? (
-                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      <ShieldCheck className="w-4 h-4 text-primary" />
                     ) : (
                       <CreditCard className="w-4 h-4 text-muted-foreground" />
                     )}
@@ -1406,55 +1668,75 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="flex gap-2">
-                <Button onClick={() => setIsQuickAddOpen(true)} className="rounded-xl transition-all">
+              <div className="flex w-full sm:w-auto gap-2 order-first sm:order-none">
+                <Button
+                  onClick={() => setIsQuickAddOpen(true)}
+                  className="rounded-xl transition-all flex-1 sm:flex-none h-11"
+                >
                   <Zap className="w-4 h-4 mr-2" />
                   Quick Add
                 </Button>
-                <Button onClick={() => setIsTransactionModalOpen(true)} variant="outline" className="rounded-xl border-border/50 hover:border-primary/50">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Completo
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl border-border/50 hover:border-primary/50 h-11"
+                    >
+                      <MoreHorizontal className="w-4 h-4 mr-2" />
+                      Más
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="rounded-xl">
+                    <DropdownMenuItem onSelect={() => setIsTransactionModalOpen(true)}>
+                      <Plus className="w-4 h-4" />
+                      Completo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setIsBudgetModalOpen(true)}>
+                      <Plus className="w-4 h-4" />
+                      Presupuesto
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setIsDebtModalOpen(true)}>
+                      <Plus className="w-4 h-4" />
+                      Deuda
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={handleExportCSV}>
+                      <Download className="w-4 h-4" />
+                      Exportar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => setIsStatementImportOpen(true)}
+                    >
+                      <Upload className="w-4 h-4" />
+                      Importar extracto
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAdvancedSections((prev) => !prev)}
+                  className="rounded-xl border-border/50 hover:border-primary/50 h-11"
+                >
+                  {showAdvancedSections ? (
+                    <ChevronUp className="w-4 h-4 mr-2" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 mr-2" />
+                  )}
+                  {showAdvancedSections ? 'Ver menos' : 'Ver más'}
                 </Button>
               </div>
-              
-              <Button onClick={() => setIsBudgetModalOpen(true)} variant="outline" className="rounded-xl border-border/50 hover:border-primary/50">
-                <Plus className="w-4 h-4 mr-2" />
-                Presupuesto
-              </Button>
-              
-              <Button onClick={() => setIsDebtModalOpen(true)} variant="outline" className="rounded-xl border-border/50 hover:border-primary/50">
-                <Plus className="w-4 h-4 mr-2" />
-                Deuda
-              </Button>
-              
-              <Button onClick={handleExportCSV} variant="outline" className="rounded-xl border-border/50 hover:border-primary/50">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-              
-              <label>
-                <Button variant="outline" asChild className="rounded-xl border-border/50 hover:border-primary/50">
-                  <span>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Importar
-                  </span>
-                </Button>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleImportCSV}
-                  className="hidden"
-                />
-              </label>
             </div>
           </div>
         </div>
       </div>
 
+      {showAdvancedSections && (
+      <div className="order-4">
       {/* Modo Tarjeta en Dieta */}
       {cardDietMode.enabled && cardDietStats && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className={`glass-card rounded-3xl shadow-xl backdrop-blur-xl border-2 transition-all ${
+          <Card className={`glass-card rounded-3xl shadow-xl backdrop-blur-xl border-2 transition-all animate-fade-up animate-delay-1 ${
             cardDietStats.violations === 0 
               ? 'bg-accent/30 border-border' 
               : 'bg-destructive/10 border-destructive/40'
@@ -1504,9 +1786,9 @@ export default function App() {
                 ))}
               </div>
               {cardDietStats.lastViolation && (
-                <div className="mt-4 p-4 glass rounded-2xl border border-rose-500/30 bg-rose-500/10">
+                <div className="mt-4 p-4 glass rounded-2xl border border-destructive/30 bg-destructive/10">
                   <div className="flex items-center gap-2 text-sm">
-                    <AlertCircle className="w-4 h-4 text-rose-500" />
+                    <AlertCircle className="w-4 h-4 text-destructive" />
                     <span>
                       Última infracción: {cardDietStats.lastViolation.description} - 
                       {formatCurrency(cardDietStats.lastViolation.amount, currency)} 
@@ -1523,7 +1805,7 @@ export default function App() {
       {/* Presupuestos Semanales & Alertas */}
       {currentWeekStats && currentWeekStats.length > 0 && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border-border/60">
+          <Card className="rounded-2xl shadow-sm border-border/60 animate-fade-up animate-delay-1">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-primary" />
@@ -1538,7 +1820,7 @@ export default function App() {
                 <div key={stat.category} className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="font-medium">{stat.category}</span>
-                    <span className={stat.remaining < 0 ? 'text-rose-600 font-semibold' : 'text-neutral-600'}>
+                    <span className={stat.remaining < 0 ? 'text-destructive font-semibold' : 'text-neutral-600'}>
                       {formatCurrency(stat.spent, currency)} / {formatCurrency(stat.limit, currency)}
                     </span>
                   </div>
@@ -1547,7 +1829,7 @@ export default function App() {
                     {stat.remaining >= 0 ? (
                       <>Te quedan {formatCurrency(stat.remaining, currency)} esta semana</>
                     ) : (
-                      <span className="text-rose-600 font-medium">
+                      <span className="text-destructive font-medium">
                         ¡Excediste en {formatCurrency(Math.abs(stat.remaining), currency)}!
                       </span>
                     )}
@@ -1562,7 +1844,7 @@ export default function App() {
       {/* Micro-gastos Alert */}
       {microSpendingStats.count > 20 && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border border-border/60 bg-accent/20">
+          <Card className="rounded-2xl shadow-sm border border-border/60 bg-accent/20 animate-fade-up animate-delay-2">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-6 h-6 text-primary" />
@@ -1599,58 +1881,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Calendario de Próximos Vencimientos */}
-      {upcomingPayments.length > 0 && (
-        <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border-border/60 bg-card">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-primary" />
-                <CardTitle className="text-lg">Próximos 7 Días</CardTitle>
-              </div>
-              <CardDescription>
-                Vencimientos y suscripciones
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {upcomingPayments.map(payment => (
-                  <div 
-                    key={payment.id} 
-                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border/60"
-                  >
-                    <div className="flex items-center gap-3">
-                      {payment.type === 'subscription' && <Repeat className="w-4 h-4 text-primary" />}
-                      {payment.type === 'card-close' && <CreditCard className="w-4 h-4 text-primary" />}
-                      {payment.type === 'card-due' && <Clock className="w-4 h-4 text-rose-600" />}
-                      {payment.type === 'other' && <Bell className="w-4 h-4 text-neutral-600" />}
-                      <div>
-                        <div className="text-sm font-medium">{payment.title}</div>
-                        <div className="text-xs text-neutral-500">
-                          {new Date(payment.dueDate).toLocaleDateString('es-ES', {
-                            day: 'numeric',
-                            month: 'short',
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    {payment.amount && (
-                      <div className="text-sm font-semibold">
-                        {formatCurrency(payment.amount, currency)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       {/* Suscripciones Detectadas */}
       {subscriptions.length > 0 && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border-border/60">
+          <Card className="rounded-2xl shadow-sm border-border/60 animate-fade-up animate-delay-3">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1732,7 +1966,7 @@ export default function App() {
                             toast.success('Suscripción marcada como cancelada');
                           }}
                         >
-                          <Ban className="w-4 h-4 text-rose-600" />
+                          <Ban className="w-4 h-4 text-destructive" />
                         </Button>
                       </div>
                     </div>
@@ -1743,10 +1977,12 @@ export default function App() {
           </Card>
         </div>
       )}
+      </div>
+      )}
 
       {/* Plan del Mes */}
-      <div className="max-w-[1440px] mx-auto mb-8">
-        <Card className="rounded-2xl shadow-sm border-border/60 bg-card">
+      <div className="max-w-[1440px] w-full mx-auto mb-8 order-1">
+        <Card className="rounded-2xl shadow-sm border-border/60 bg-card animate-fade-up animate-delay-3">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1796,12 +2032,12 @@ export default function App() {
                 {/* Tope de gasto variable */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
-                    <TrendingDown className="w-4 h-4 text-rose-600" />
+                    <TrendingDown className="w-4 h-4 text-destructive" />
                     Tope de gasto variable
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-semibold text-rose-700">
+                      <span className="text-2xl font-semibold text-destructive">
                         {formatCurrency(monthTransactions
                           .filter(t => {
                             const cat = categories.find(c => c.name === t.category);
@@ -1838,12 +2074,12 @@ export default function App() {
                 {/* Pago mínimo de deudas */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
-                    <CreditCard className="w-4 h-4 text-orange-600" />
+                    <CreditCard className="w-4 h-4 text-muted-foreground" />
                     Pago mínimo de deudas
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-semibold text-orange-700">
+                      <span className="text-2xl font-semibold text-foreground">
                         {formatCurrency(monthStats.debtPayments, currency)}
                       </span>
                       <span className="text-sm text-neutral-500">
@@ -1853,13 +2089,13 @@ export default function App() {
                     <div className="flex items-center gap-2 mt-2">
                       {monthStats.debtPayments >= currentGoal.minimumDebtPayment ? (
                         <>
-                          <Check className="w-5 h-5 text-emerald-600" />
-                          <span className="text-sm text-emerald-600 font-medium">Completado</span>
+                          <Check className="w-5 h-5 text-primary" />
+                          <span className="text-sm text-primary font-medium">Completado</span>
                         </>
                       ) : (
                         <>
-                          <AlertCircle className="w-5 h-5 text-amber-600" />
-                          <span className="text-sm text-amber-600 font-medium">
+                          <AlertCircle className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground font-medium">
                             Faltan {formatCurrency(currentGoal.minimumDebtPayment - monthStats.debtPayments, currency)}
                           </span>
                         </>
@@ -1882,11 +2118,92 @@ export default function App() {
         </Card>
       </div>
 
+      {/* Estado de todos los meses */}
+      {showAdvancedSections && (
+      <div className="max-w-[1440px] w-full mx-auto mb-8 order-2">
+        <Card className="rounded-2xl shadow-sm border-border/60 bg-card animate-fade-up animate-delay-3">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-primary" />
+              <CardTitle className="text-lg">Estado de todos los meses</CardTitle>
+            </div>
+            <CardDescription>
+              Resumen histórico para comparar ingresos, gastos y balance por mes
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mes</TableHead>
+                    <TableHead className="text-right">Ingresos</TableHead>
+                    <TableHead className="text-right">Gastos</TableHead>
+                    <TableHead className="text-right">Ahorro</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allMonthsOverview.map((monthItem) => (
+                    <TableRow key={monthItem.month}>
+                      <TableCell className="font-medium">
+                        {new Date(monthItem.month + '-01').toLocaleDateString('es-ES', {
+                          year: 'numeric',
+                          month: 'long',
+                        })}
+                      </TableCell>
+                      <TableCell className="text-right text-primary font-medium">
+                        {monthItem.income === 0 ? '—' : formatCurrency(monthItem.income, currency)}
+                      </TableCell>
+                      <TableCell className="text-right text-destructive font-medium">
+                        {monthItem.expenses === 0 ? '—' : formatCurrency(monthItem.expenses, currency)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {monthItem.savings === 0 ? '—' : formatCurrency(monthItem.savings, currency)}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-semibold ${
+                          monthItem.balance >= 0 ? 'text-primary' : 'text-destructive'
+                        }`}
+                      >
+                        {monthItem.balance === 0 ? '—' : formatCurrency(monthItem.balance, currency)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={monthItem.balance < 0 ? 'destructive' : 'secondary'}>
+                            {monthItem.balance < 0 ? 'Déficit' : monthItem.balance > 0 ? 'Superávit' : 'Neutro'}
+                          </Badge>
+                          {monthItem.hasGoal ? (
+                            <Badge variant="outline">Con meta</Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant={selectedMonth === monthItem.month ? 'default' : 'outline'}
+                          onClick={() => setSelectedMonth(monthItem.month)}
+                        >
+                          {selectedMonth === monthItem.month ? 'Actual' : 'Ver mes'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      )}
+
       {/* Main Grid */}
-      <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-up animate-delay-1 order-3">
         {/* LEFT COLUMN */}
         <div className="space-y-8">
-          <Card className="glass-card rounded-3xl shadow-xl shadow-black/5 border-border/50 backdrop-blur-xl">
+          <Card className="glass-card rounded-3xl shadow-xl shadow-black/5 border-border/50 backdrop-blur-xl animate-pop-in animate-delay-1 order-2 lg:order-1">
             <CardHeader className="pb-6">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center">
@@ -1908,7 +2225,7 @@ export default function App() {
               <div className="text-center py-8 glass rounded-3xl border border-border/30">
                 <div className="text-sm text-muted-foreground mb-3 font-medium tracking-wide uppercase">Saldo del mes</div>
                 <div className={`text-6xl font-bold mb-2 tracking-tight ${
-                  monthStats.balance >= 0 ? 'text-emerald-500' : 'text-rose-500'
+                  monthStats.balance >= 0 ? 'text-primary' : 'text-destructive'
                 }`}>
                   {formatCurrency(monthStats.balance, currency)}
                 </div>
@@ -1921,36 +2238,36 @@ export default function App() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2 p-4 glass rounded-2xl border border-border/30">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <TrendingUp className="w-4 h-4 text-emerald-500" />
+                    <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-primary" />
                     </div>
                     Ingresos
                   </div>
-                  <div className="text-xl font-bold text-emerald-500 tracking-tight">
+                  <div className="text-xl font-bold text-primary tracking-tight">
                     {formatCurrency(monthStats.income, currency)}
                   </div>
                 </div>
                 
                 <div className="space-y-2 p-4 glass rounded-2xl border border-border/30">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                    <div className="w-8 h-8 rounded-xl bg-rose-500/10 flex items-center justify-center">
-                      <TrendingDown className="w-4 h-4 text-rose-500" />
+                    <div className="w-8 h-8 rounded-xl bg-destructive/10 flex items-center justify-center">
+                      <TrendingDown className="w-4 h-4 text-destructive" />
                     </div>
                     Gastos
                   </div>
-                  <div className="text-xl font-bold text-rose-500 tracking-tight">
+                  <div className="text-xl font-bold text-destructive tracking-tight">
                     {formatCurrency(monthStats.expenses, currency)}
                   </div>
                 </div>
                 
-                <div className="space-y-2 p-4 glass rounded-2xl border border-border/30">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                    <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
-                      <PiggyBank className="w-4 h-4 text-primary" />
+                <div className="space-y-2 p-4 rounded-2xl border border-primary/30 bg-primary shadow-sm shadow-primary/20">
+                  <div className="flex items-center gap-2 text-sm text-primary-foreground/90 font-medium">
+                    <div className="w-8 h-8 rounded-xl bg-primary-foreground/15 flex items-center justify-center">
+                      <PiggyBank className="w-4 h-4 text-primary-foreground" />
                     </div>
                     Ahorro
                   </div>
-                  <div className="text-xl font-bold text-primary tracking-tight">
+                  <div className="text-xl font-bold text-primary-foreground tracking-tight">
                     {formatCurrency(monthStats.savings, currency)}
                   </div>
                 </div>
@@ -1994,7 +2311,7 @@ export default function App() {
               )}
 
               {/* Insights rápidos */}
-              {monthInsights.length > 0 && (
+              {showAdvancedSections && monthInsights.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium text-neutral-700">
                     <Zap className="w-4 h-4 text-primary" />
@@ -2015,10 +2332,10 @@ export default function App() {
 
           {/* Próximos 7 días */}
           {upcomingItems.length > 0 && (
-            <Card className="rounded-2xl shadow-sm border-neutral-200">
+            <Card className="rounded-2xl shadow-sm border-neutral-200 animate-pop-in animate-delay-2 order-3 lg:order-2">
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-orange-600" />
+                  <Bell className="w-5 h-5 text-amber-600" />
                   <CardTitle>Próximos 7 días</CardTitle>
                 </div>
                 <CardDescription>Recordatorios y vencimientos</CardDescription>
@@ -2026,11 +2343,18 @@ export default function App() {
               <CardContent>
                 <div className="space-y-3">
                   {upcomingItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-3 p-3 rounded-lg border ${
+                        item.type === 'debt'
+                          ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/35 dark:border-amber-800/60'
+                          : 'bg-sky-50 border-sky-200 dark:bg-sky-950/35 dark:border-sky-800/60'
+                      }`}
+                    >
                       {item.type === 'debt' ? (
-                        <CreditCard className="w-5 h-5 text-orange-600 flex-shrink-0" />
+                        <CreditCard className="w-5 h-5 text-amber-600 flex-shrink-0" />
                       ) : (
-                        <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                        <AlertCircle className="w-5 h-5 text-sky-600 flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-neutral-900">{item.name}</div>
@@ -2047,7 +2371,7 @@ export default function App() {
           )}
 
           {/* Transactions Table */}
-          <Card className="rounded-2xl shadow-sm border-neutral-200">
+          <Card className="rounded-2xl shadow-sm border-neutral-200 animate-pop-in animate-delay-3 order-1 lg:order-3">
             <CardHeader>
               <CardTitle>Movimientos</CardTitle>
               <CardDescription>
@@ -2154,13 +2478,13 @@ export default function App() {
                             <Badge variant="outline">{transaction.category}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={transaction.type === 'Income' ? 'default' : 'secondary'}>
+                            <Badge variant={transaction.type === 'Income' ? 'default' : 'destructive'}>
                               {transaction.type === 'Income' ? 'Ingreso' : 'Gasto'}
                             </Badge>
                           </TableCell>
                           <TableCell>{transaction.account}</TableCell>
                           <TableCell className={`text-right font-semibold ${
-                            transaction.type === 'Income' ? 'text-emerald-700' : 'text-rose-700'
+                            transaction.type === 'Income' ? 'text-primary' : 'text-destructive'
                           }`}>
                             {formatCurrency(transaction.amount, currency)}
                           </TableCell>
@@ -2181,7 +2505,7 @@ export default function App() {
                                 variant="ghost"
                                 onClick={() => handleDeleteTransaction(transaction.id)}
                               >
-                                <Trash2 className="w-4 h-4 text-rose-600" />
+                                <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
                             </div>
                           </TableCell>
@@ -2203,7 +2527,8 @@ export default function App() {
 
         {/* RIGHT COLUMN */}
         <div className="space-y-8">
-          <Card className="rounded-2xl shadow-sm border-neutral-200">
+          {showAdvancedSections && (
+          <Card className="rounded-2xl shadow-sm border-neutral-200 animate-pop-in animate-delay-1">
             <CardHeader>
               <CardTitle>Cuentas</CardTitle>
               <CardDescription>Gestiona tus cuentas de banco/tarjeta/efectivo</CardDescription>
@@ -2259,7 +2584,7 @@ export default function App() {
                       ) : isEditing ? (
                         <>
                           <Button size="sm" variant="ghost" onClick={handleSaveEditAccount}>
-                            <Check className="w-4 h-4 text-emerald-600" />
+                            <Check className="w-4 h-4 text-primary" />
                           </Button>
                           <Button
                             size="sm"
@@ -2278,7 +2603,7 @@ export default function App() {
                             <Edit2 className="w-4 h-4" />
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleDeleteAccount(account)}>
-                            <Trash2 className="w-4 h-4 text-rose-600" />
+                            <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
                         </>
                       )}
@@ -2288,9 +2613,10 @@ export default function App() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Budget vs Spent */}
-          <Card className="rounded-2xl shadow-sm border-neutral-200">
+          <Card className="rounded-2xl shadow-sm border-neutral-200 animate-pop-in animate-delay-2">
             <CardHeader>
               <CardTitle>Presupuesto vs Gastado</CardTitle>
               <CardDescription>Seguimiento mensual de categorías</CardDescription>
@@ -2358,7 +2684,7 @@ export default function App() {
                           </TableCell>
                           <TableCell className={`text-right font-semibold ${
                             stat.budget === 0 ? 'text-neutral-400' : 
-                            stat.diff >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                            stat.diff >= 0 ? 'text-primary' : 'text-destructive'
                           }`}>
                             {stat.budget === 0 ? '—' : formatCurrency(stat.diff, currency)}
                           </TableCell>
@@ -2388,7 +2714,7 @@ export default function App() {
                                 onClick={() => handleMarkBudgetAsPaid(stat)}
                                 disabled={Boolean(stat.paidAt)}
                               >
-                                <Check className="w-4 h-4 text-emerald-600" />
+                                <Check className="w-4 h-4 text-primary" />
                               </Button>
                               <Button
                                 size="sm"
@@ -2405,7 +2731,7 @@ export default function App() {
                                 variant="ghost"
                                 onClick={() => handleDeleteBudget(stat.id)}
                               >
-                                <Trash2 className="w-4 h-4 text-rose-600" />
+                                <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
                             </div>
                           </TableCell>
@@ -2426,7 +2752,7 @@ export default function App() {
           </Card>
 
           {/* Debts Table */}
-          <Card className="rounded-2xl shadow-sm border-neutral-200">
+          <Card className="rounded-2xl shadow-sm border-neutral-200 animate-pop-in animate-delay-3">
             <CardHeader>
               <CardTitle>Deudas</CardTitle>
               <CardDescription>Seguimiento y pagos mensuales</CardDescription>
@@ -2479,11 +2805,11 @@ export default function App() {
                           <TableCell className="text-right text-neutral-600">
                             Día {debt.dueDay}
                           </TableCell>
-                          <TableCell className="text-right text-emerald-700 font-semibold">
+                          <TableCell className="text-right text-primary font-semibold">
                             {debt.paidThisMonth === 0 ? '—' : formatCurrency(debt.paidThisMonth, currency)}
                           </TableCell>
                           <TableCell className={`text-right font-semibold ${
-                            debt.remaining > 0 ? 'text-rose-700' : 'text-emerald-700'
+                            debt.remaining > 0 ? 'text-destructive' : 'text-primary'
                           }`}>
                             {debt.remaining === 0 ? '—' : formatCurrency(Math.max(0, debt.remaining), currency)}
                           </TableCell>
@@ -2504,7 +2830,7 @@ export default function App() {
                                 variant="ghost"
                                 onClick={() => handleDeleteDebt(debt.id)}
                               >
-                                <Trash2 className="w-4 h-4 text-rose-600" />
+                                <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
                             </div>
                           </TableCell>
@@ -2604,6 +2930,16 @@ export default function App() {
           onClose={() => setIsQuickAddOpen(false)}
           onSave={handleAddTransaction}
           categories={categories}
+          selectedMonth={selectedMonth}
+        />
+
+        <StatementImportModal
+          isOpen={isStatementImportOpen}
+          onClose={() => setIsStatementImportOpen(false)}
+          onImport={handleImportStatement}
+          categories={categories.map((category) => category.name)}
+          categoryRules={categoryRules}
+          accounts={availableAccounts}
           selectedMonth={selectedMonth}
         />
 

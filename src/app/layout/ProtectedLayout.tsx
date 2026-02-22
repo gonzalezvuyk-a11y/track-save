@@ -21,9 +21,11 @@ export function ProtectedLayout() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link to="/dashboard" className="text-sm font-semibold">
-            Track Save
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between px-4 py-3 md:px-8">
+          <Link to="/dashboard" className="inline-flex items-center">
+            <img src="/track-save-logo.svg" alt="Track Save" className="h-7 w-auto dark:hidden" />
+            <img src="/track-save-logo-negative.svg" alt="Track Save" className="hidden h-7 w-auto dark:block" />
+            <span className="sr-only">Track Save</span>
           </Link>
           <nav className="flex items-center gap-2">
             <NavLink

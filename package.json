@@ -6,6 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
+    "db:migrate:income-type": "npm run db:push",
     "db:push": "bash -lc 'source .env.db.local && supabase db push --db-url \"$SUPABASE_DB_URL\"'",
     "db:reset:remote": "bash -lc 'source .env.db.local && supabase db reset --db-url \"$SUPABASE_DB_URL\"'"
   },
@@ -44,6 +45,7 @@
     "input-otp": "1.4.2",
     "lucide-react": "0.487.0",
     "next-themes": "0.4.6",
+    "pdfjs-dist": "^5.4.624",
     "react-day-picker": "8.10.1",
     "react-hook-form": "7.55.0",
     "react-resizable-panels": "2.1.7",

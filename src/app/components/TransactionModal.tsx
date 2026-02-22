@@ -295,7 +295,7 @@ export function TransactionModal({
                     <button
                       type="button"
                       onClick={() => handleRemoveTag(tag)}
-                      className="ml-1 hover:text-rose-600"
+                      className="ml-1 hover:text-destructive"
                     >
                       <X className="w-3 h-3" />
                     </button>

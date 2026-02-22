@@ -87,7 +87,7 @@ export function GoalModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
-              <PiggyBank className="w-4 h-4 text-violet-600" />
+              <PiggyBank className="w-4 h-4 text-primary" />
               Meta de ahorro ({getCurrencySymbol(currency)})
             </label>
             <Input
@@ -103,7 +103,7 @@ export function GoalModal({
 
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-rose-600" />
+              <TrendingDown className="w-4 h-4 text-destructive" />
               Tope de gastos variables ({getCurrencySymbol(currency)})
             </label>
             <Input
@@ -122,7 +122,7 @@ export function GoalModal({
 
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-orange-600" />
+              <CreditCard className="w-4 h-4 text-muted-foreground" />
               Pago mínimo de deudas ({getCurrencySymbol(currency)})
             </label>
             <Input
@@ -136,7 +136,7 @@ export function GoalModal({
             />
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
+          <div className="bg-sky-50 border border-sky-200 rounded-lg p-4 text-sm text-sky-900">
             💡 <strong>Tip:</strong> Estas metas te ayudan a tener un plan claro cada mes.
             Revisalas y ajustalas según tus ingresos y prioridades.
           </div>

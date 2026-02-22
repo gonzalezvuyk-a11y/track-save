@@ -16,11 +16,13 @@ import { formatNumberWithDots, parseNumberFromDots } from '../lib/finance';
 
 type Category = {
   name: string;
+  type: 'Income' | 'Expense';
 };
 
 type BudgetRow = {
   id: string;
   month: string;
+  type: 'Income' | 'Expense';
   category: string;
   budget: number;
   description?: string;
@@ -46,6 +48,7 @@ export function BudgetModal({
 }) {
   const [formData, setFormData] = useState<Omit<BudgetRow, 'id'>>({
     month: selectedMonth,
+    type: 'Expense',
     category: '',
     budget: 0,
     description: '',
@@ -60,6 +63,7 @@ export function BudgetModal({
     } else {
       setFormData({
         month: selectedMonth,
+        type: 'Expense',
         category: '',
         budget: 0,
         description: '',
@@ -69,6 +73,29 @@ export function BudgetModal({
       });
     }
   }, [budget, selectedMonth, isOpen]);
+
+  useEffect(() => {
+    setFormData((prev) => {
+      if (!prev.category) {
+        return prev;
+      }
+
+      const categoryStillMatchesType = categories.some(
+        (category) => category.name === prev.category && category.type === prev.type,
+      );
+
+      if (categoryStillMatchesType) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        category: '',
+      };
+    });
+  }, [categories, formData.type]);
+
+  const filteredCategories = categories.filter((category) => category.type === formData.type);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -85,13 +112,34 @@ export function BudgetModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="budget-type">Tipo</Label>
+            <Select
+              value={formData.type}
+              onValueChange={(value: 'Income' | 'Expense') =>
+                setFormData({
+                  ...formData,
+                  type: value,
+                })
+              }
+            >
+              <SelectTrigger id="budget-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Expense">Egreso</SelectItem>
+                <SelectItem value="Income">Ingreso</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="budget-category">Categoría</Label>
             <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
               <SelectTrigger id="budget-category">
                 <SelectValue placeholder="Selecciona una categoría" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((cat) => (
+                {filteredCategories.map((cat) => (
                   <SelectItem key={cat.name} value={cat.name}>
                     {cat.name}
                   </SelectItem>

@@ -13,8 +13,17 @@ type ProfileRecord = {
   full_name: string;
   currency: 'PYG' | 'USD';
   monthly_income: number | null;
+  income_type: 'fixed' | 'freelance';
   role: 'user' | 'admin';
 };
+
+const isMissingIncomeTypeColumnError = (error: { code?: string; message?: string } | null | undefined) =>
+  Boolean(
+    error &&
+      (error.code === '42703' ||
+        error.message?.toLowerCase().includes('income_type') ||
+        error.message?.toLowerCase().includes('column profiles.income_type does not exist')),
+  );
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -23,6 +32,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({
     full_name: '',
     currency: 'PYG',
+    income_type: 'fixed',
     monthly_income: '',
   });
   const [role, setRole] = useState<'user' | 'admin'>('user');
@@ -33,29 +43,61 @@ export default function ProfilePage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, currency, monthly_income, role')
+        .select('id, full_name, currency, monthly_income, income_type, role')
         .eq('id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        toast.error(error.message);
+      let resolvedData = data;
+      let resolvedError = error;
+
+      if (isMissingIncomeTypeColumnError(error)) {
+        const legacyResult = await supabase
+          .from('profiles')
+          .select('id, full_name, currency, monthly_income, role')
+          .eq('id', user.id)
+          .single();
+
+        resolvedData = legacyResult.data
+          ? {
+              ...legacyResult.data,
+              income_type: 'fixed',
+            }
+          : null;
+        resolvedError = legacyResult.error;
+      }
+
+      if (resolvedError && resolvedError.code !== 'PGRST116') {
+        toast.error(resolvedError.message);
         setLoading(false);
         return;
       }
 
-      const profile = data as ProfileRecord | null;
+      const profile = resolvedData as ProfileRecord | null;
 
       if (!profile) {
         const { error: insertError } = await supabase.from('profiles').insert({
           id: user.id,
           full_name: user.user_metadata?.full_name ?? '',
           currency: 'PYG',
+          income_type: 'fixed',
           monthly_income: null,
           role: 'user',
         });
 
-        if (insertError) {
-          toast.error(insertError.message);
+        let resolvedInsertError = insertError;
+        if (isMissingIncomeTypeColumnError(insertError)) {
+          const legacyInsert = await supabase.from('profiles').insert({
+            id: user.id,
+            full_name: user.user_metadata?.full_name ?? '',
+            currency: 'PYG',
+            monthly_income: null,
+            role: 'user',
+          });
+          resolvedInsertError = legacyInsert.error;
+        }
+
+        if (resolvedInsertError) {
+          toast.error(resolvedInsertError.message);
           setLoading(false);
           return;
         }
@@ -63,6 +105,7 @@ export default function ProfilePage() {
         setForm({
           full_name: user.user_metadata?.full_name ?? '',
           currency: 'PYG',
+          income_type: 'fixed',
           monthly_income: '',
         });
         setRole('user');
@@ -73,6 +116,7 @@ export default function ProfilePage() {
       setForm({
         full_name: profile.full_name ?? '',
         currency: profile.currency ?? 'PYG',
+        income_type: profile.income_type ?? 'fixed',
         monthly_income: profile.monthly_income === null ? '' : String(profile.monthly_income),
       });
       setRole(profile.role ?? 'user');
@@ -94,17 +138,31 @@ export default function ProfilePage() {
 
     setSaving(true);
 
-    const { error } = await supabase.from('profiles').upsert({
+    const payload = {
       id: user.id,
       full_name: parsed.data.full_name,
       currency: parsed.data.currency,
+      income_type: parsed.data.income_type,
       monthly_income: parsed.data.monthly_income,
-    });
+    };
+
+    const { error } = await supabase.from('profiles').upsert(payload);
+
+    let resolvedError = error;
+    if (isMissingIncomeTypeColumnError(error)) {
+      const legacyResult = await supabase.from('profiles').upsert({
+        id: user.id,
+        full_name: parsed.data.full_name,
+        currency: parsed.data.currency,
+        monthly_income: parsed.data.monthly_income,
+      });
+      resolvedError = legacyResult.error;
+    }
 
     setSaving(false);
 
-    if (error) {
-      toast.error(error.message);
+    if (resolvedError) {
+      toast.error(resolvedError.message);
       return;
     }
 
@@ -137,7 +195,7 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="currency">Moneda</Label>
                   <select
@@ -150,6 +208,24 @@ export default function ProfilePage() {
                   >
                     <option value="PYG">PYG</option>
                     <option value="USD">USD</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="income_type">Tipo de ingreso</Label>
+                  <select
+                    id="income_type"
+                    className="flex h-9 w-full rounded-md border border-input bg-input-background px-3 text-sm"
+                    value={form.income_type}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        income_type: event.target.value as 'fixed' | 'freelance',
+                      }))
+                    }
+                  >
+                    <option value="fixed">Fijo</option>
+                    <option value="freelance">Freelance</option>
                   </select>
                 </div>
 

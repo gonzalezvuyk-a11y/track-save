@@ -86,16 +86,16 @@ export function QuickAddModal({
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-blue-600" />
+            <Zap className="w-5 h-5 text-primary" />
             <DialogTitle>Quick Add</DialogTitle>
           </div>
           <DialogDescription>Agregar movimiento rápido en el mes seleccionado</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-900">
+          <div className="flex items-center gap-2 p-3 bg-accent rounded-lg border border-border">
+            <Calendar className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-accent-foreground">
               {new Date(getDefaultDateForMonth(selectedMonth)).toLocaleDateString('es-ES', {
                 weekday: 'long',
                 day: 'numeric',
@@ -109,7 +109,7 @@ export function QuickAddModal({
             <Button
               type="button"
               variant={type === 'Expense' ? 'default' : 'outline'}
-              className={type === 'Expense' ? 'bg-rose-600 hover:bg-rose-700' : ''}
+              className={type === 'Expense' ? 'bg-destructive hover:bg-destructive/90' : ''}
               onClick={() => setType('Expense')}
             >
               <TrendingDown className="w-4 h-4 mr-2" />
@@ -118,7 +118,7 @@ export function QuickAddModal({
             <Button
               type="button"
               variant={type === 'Income' ? 'default' : 'outline'}
-              className={type === 'Income' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+              className={type === 'Income' ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : ''}
               onClick={() => setType('Income')}
             >
               <TrendingUp className="w-4 h-4 mr-2" />
@@ -162,7 +162,7 @@ export function QuickAddModal({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+            <Button type="submit">
               <Zap className="w-4 h-4 mr-2" />
               Agregar
             </Button>

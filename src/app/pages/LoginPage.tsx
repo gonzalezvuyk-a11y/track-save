@@ -92,6 +92,10 @@ export default function LoginPage() {
     <AuthShell
       title="Iniciar sesión"
       description="Accede a tu cuenta para ver tus finanzas"
+      introTitle="Controla tus finanzas en un solo lugar"
+      introText="Una vista clara para decidir mejor cada día."
+      introChips={['Presupuesto', 'Metas', 'Deudas']}
+      showPixelBackground={false}
       footerText="¿No tienes cuenta?"
       footerLinkText="Regístrate"
       footerLinkTo="/register"

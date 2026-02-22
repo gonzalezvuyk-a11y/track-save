@@ -4,9 +4,24 @@
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <link rel="icon" type="image/svg+xml" href="/track-save-logo.svg" media="(prefers-color-scheme: light)" />
-      <link rel="icon" type="image/svg+xml" href="/track-save-logo-negative.svg" media="(prefers-color-scheme: dark)" />
-      <link rel="icon" type="image/svg+xml" href="/track-save-logo.svg" />
+      <link rel="icon" type="image/svg+xml" href="/favicon-track-save.svg" id="app-favicon" />
+      <script>
+        (() => {
+          const lightIcon = "/favicon-track-save.svg";
+          const darkIcon = "/favicon-track-save-negative.svg";
+          const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+          const applyFavicon = (isDark) => {
+            const favicon = document.getElementById("app-favicon");
+            if (favicon) {
+              favicon.setAttribute("href", isDark ? darkIcon : lightIcon);
+            }
+          };
+
+          applyFavicon(mediaQuery.matches);
+          mediaQuery.addEventListener("change", (event) => applyFavicon(event.matches));
+        })();
+      </script>
       <title>track&save</title>
     </head>
 

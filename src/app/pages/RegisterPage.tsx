@@ -9,6 +9,14 @@ import { isGithubOAuthEnabled, isGoogleOAuthEnabled, supabase } from '../../lib/
 import { registerSchema } from '../../lib/validation/auth';
 import { AuthShell } from './AuthShell';
 
+const isMissingIncomeTypeColumnError = (error: { code?: string; message?: string } | null | undefined) =>
+  Boolean(
+    error &&
+      (error.code === '42703' ||
+        error.message?.toLowerCase().includes('income_type') ||
+        error.message?.toLowerCase().includes('column profiles.income_type does not exist')),
+  );
+
 export default function RegisterPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -19,6 +27,7 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
     currency: 'PYG',
+    incomeType: 'fixed',
     monthlyIncome: '',
   });
 
@@ -44,6 +53,7 @@ export default function RegisterPage() {
         emailRedirectTo: `${window.location.origin}/login`,
         data: {
           full_name: parsed.data.fullName,
+          income_type: parsed.data.incomeType,
         },
       },
     });
@@ -69,17 +79,31 @@ export default function RegisterPage() {
         id: data.user.id,
         full_name: parsed.data.fullName,
         currency: parsed.data.currency,
+        income_type: parsed.data.incomeType,
         monthly_income: parsed.data.monthlyIncome,
         role: 'user',
       });
 
-      if (profileError) {
+      let resolvedProfileError = profileError;
+
+      if (isMissingIncomeTypeColumnError(profileError)) {
+        const legacyProfileResult = await supabase.from('profiles').upsert({
+          id: data.user.id,
+          full_name: parsed.data.fullName,
+          currency: parsed.data.currency,
+          monthly_income: parsed.data.monthlyIncome,
+          role: 'user',
+        });
+        resolvedProfileError = legacyProfileResult.error;
+      }
+
+      if (resolvedProfileError) {
         const missingProfilesTable =
-          profileError.code === '42P01' || profileError.message.toLowerCase().includes('profiles');
+          resolvedProfileError.code === '42P01' || resolvedProfileError.message.toLowerCase().includes('profiles');
 
         if (!missingProfilesTable) {
           setLoading(false);
-          toast.error(profileError.message);
+          toast.error(resolvedProfileError.message);
           return;
         }
 
@@ -141,7 +165,7 @@ export default function RegisterPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="currency">Moneda</Label>
             <select
@@ -152,6 +176,18 @@ export default function RegisterPage() {
             >
               <option value="PYG">PYG</option>
               <option value="USD">USD</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="incomeType">Tipo de ingreso</Label>
+            <select
+              id="incomeType"
+              className="flex h-9 w-full rounded-md border border-input bg-input-background px-3 text-sm"
+              value={form.incomeType}
+              onChange={(event) => setForm((prev) => ({ ...prev, incomeType: event.target.value }))}
+            >
+              <option value="fixed">Fijo</option>
+              <option value="freelance">Freelance</option>
             </select>
           </div>
           <div className="space-y-2">

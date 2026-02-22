@@ -54,7 +54,7 @@ export function PayoffPlanModal({
           </TabsList>
 
           <TabsContent value="avalanche" className="space-y-4">
-            <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-900">
+            <div className="rounded-lg bg-sky-50 p-4 text-sm text-sky-900 border border-sky-200">
               <strong>Método Avalancha:</strong> Prioriza deudas con mayor tasa de interés (APR).
               Minimiza el interés total pagado.
             </div>
@@ -67,7 +67,7 @@ export function PayoffPlanModal({
                 <ol className="space-y-2">
                   {avalanche.map((debt, index) => (
                     <li key={debt.id} className="flex items-start gap-3 p-3 rounded-lg bg-neutral-50">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-sm flex items-center justify-center">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
                         {index + 1}
                       </div>
                       <div className="flex-1">
@@ -84,7 +84,7 @@ export function PayoffPlanModal({
           </TabsContent>
 
           <TabsContent value="snowball" className="space-y-4">
-            <div className="rounded-lg bg-green-50 p-4 text-sm text-green-900">
+            <div className="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-900 border border-emerald-200">
               <strong>Método Bola de nieve:</strong> Prioriza deudas con menor balance.
               Genera victorias rápidas y motivación psicológica.
             </div>
@@ -97,7 +97,7 @@ export function PayoffPlanModal({
                 <ol className="space-y-2">
                   {snowball.map((debt, index) => (
                     <li key={debt.id} className="flex items-start gap-3 p-3 rounded-lg bg-neutral-50">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-sm flex items-center justify-center">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
                         {index + 1}
                       </div>
                       <div className="flex-1">
@@ -115,7 +115,7 @@ export function PayoffPlanModal({
           </TabsContent>
         </Tabs>
 
-        <div className="rounded-lg bg-yellow-50 p-4 text-xs text-yellow-900">
+        <div className="rounded-lg bg-amber-50 p-4 text-xs text-amber-900 border border-amber-200">
           <strong>Nota:</strong> Estas son sugerencias educativas, no asesoría financiera.
           Consulta con un profesional para tu situación específica.
         </div>
