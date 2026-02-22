@@ -82,6 +82,20 @@ execute procedure public.handle_new_user();
 alter table public.profiles enable row level security;
 alter table public.finance_transactions enable row level security;
 
+create or replace function public.is_admin(check_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = check_user_id and p.role = 'admin'
+  );
+$$;
+
 -- Profiles policies
 
 drop policy if exists "profiles_select_own_or_admin" on public.profiles;
@@ -90,11 +104,7 @@ on public.profiles
 for select
 using (
   auth.uid() = id
-  or exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
-  )
+  or public.is_admin(auth.uid())
 );
 
 drop policy if exists "profiles_insert_own" on public.profiles;
@@ -109,26 +119,14 @@ on public.profiles
 for update
 using (
   auth.uid() = id
-  or exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
-  )
+  or public.is_admin(auth.uid())
 )
 with check (
   (
     auth.uid() = id
-    and role = (
-      select p_self.role
-      from public.profiles p_self
-      where p_self.id = auth.uid()
-    )
+    and role = 'user'
   )
-  or exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
-  )
+  or public.is_admin(auth.uid())
 );
 
 -- Transactions policies
@@ -139,11 +137,7 @@ on public.finance_transactions
 for select
 using (
   auth.uid() = user_id
-  or exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
-  )
+  or public.is_admin(auth.uid())
 );
 
 drop policy if exists "transactions_insert_own" on public.finance_transactions;
@@ -158,19 +152,11 @@ on public.finance_transactions
 for update
 using (
   auth.uid() = user_id
-  or exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
-  )
+  or public.is_admin(auth.uid())
 )
 with check (
   auth.uid() = user_id
-  or exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
-  )
+  or public.is_admin(auth.uid())
 );
 
 drop policy if exists "transactions_delete_own_or_admin" on public.finance_transactions;
@@ -179,9 +165,5 @@ on public.finance_transactions
 for delete
 using (
   auth.uid() = user_id
-  or exists (
-    select 1
-    from public.profiles p
-    where p.id = auth.uid() and p.role = 'admin'
-  )
+  or public.is_admin(auth.uid())
 );
