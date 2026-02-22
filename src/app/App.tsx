@@ -1294,16 +1294,14 @@ export default function App() {
     <div className="min-h-screen bg-background p-4 md:p-8 transition-colors duration-300">
       <Toaster />
       
-      {/* Top Bar - Apple Style */}
+      {/* Top Bar */}
       <div className="max-w-[1440px] mx-auto mb-8">
-        <div className="glass-card rounded-3xl shadow-2xl shadow-black/5 border border-border/50 p-8 backdrop-blur-xl">
+        <div className="glass-card rounded-3xl shadow-xl shadow-black/5 border border-border/50 p-8 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-                <Wallet className="w-6 h-6 text-white" />
-              </div>
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight">track&save</h1>
+                <img src="/track-save-logo.svg" alt="track&save" className="h-8 w-auto dark:hidden" />
+                <img src="/track-save-logo-negative.svg" alt="track&save" className="hidden h-8 w-auto dark:block" />
                 <p className="text-sm text-muted-foreground mt-0.5">Gestiona tus finanzas inteligentemente</p>
               </div>
             </div>
@@ -1409,7 +1407,7 @@ export default function App() {
               </div>
               
               <div className="flex gap-2">
-                <Button onClick={() => setIsQuickAddOpen(true)} className="rounded-xl bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-500/25 transition-all">
+                <Button onClick={() => setIsQuickAddOpen(true)} className="rounded-xl transition-all">
                   <Zap className="w-4 h-4 mr-2" />
                   Quick Add
                 </Button>
@@ -1453,21 +1451,21 @@ export default function App() {
         </div>
       </div>
 
-      {/* Modo Tarjeta en Dieta - Apple Style */}
+      {/* Modo Tarjeta en Dieta */}
       {cardDietMode.enabled && cardDietStats && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className={`glass-card rounded-3xl shadow-2xl backdrop-blur-xl border-2 transition-all ${
+          <Card className={`glass-card rounded-3xl shadow-xl backdrop-blur-xl border-2 transition-all ${
             cardDietStats.violations === 0 
-              ? 'bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/30 shadow-emerald-500/10' 
-              : 'bg-gradient-to-br from-rose-500/10 to-transparent border-rose-500/30 shadow-rose-500/10'
+              ? 'bg-accent/30 border-border' 
+              : 'bg-destructive/10 border-destructive/40'
           }`}>
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
                     cardDietStats.violations === 0 
-                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/25' 
-                      : 'bg-gradient-to-br from-rose-500 to-rose-600 shadow-rose-500/25'
+                        ? 'bg-primary' 
+                        : 'bg-destructive'
                   }`}>
                     {cardDietStats.violations === 0 ? (
                       <ShieldCheck className="w-7 h-7 text-white" />
@@ -1497,7 +1495,7 @@ export default function App() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Check className="w-4 h-4 text-emerald-500" />
+                <Check className="w-4 h-4 text-primary" />
                 <span className="font-medium">Excepciones permitidas:</span>
                 {cardDietMode.exceptions.map(exc => (
                   <Badge key={exc} variant="outline" className="text-xs rounded-full border-border/50">
@@ -1525,10 +1523,10 @@ export default function App() {
       {/* Presupuestos Semanales & Alertas */}
       {currentWeekStats && currentWeekStats.length > 0 && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border-neutral-200">
+          <Card className="rounded-2xl shadow-sm border-border/60">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-600" />
+                <Calendar className="w-5 h-5 text-primary" />
                 <CardTitle className="text-lg">Presupuestos Semanales</CardTitle>
               </div>
               <CardDescription>
@@ -1564,10 +1562,10 @@ export default function App() {
       {/* Micro-gastos Alert */}
       {microSpendingStats.count > 20 && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white">
+          <Card className="rounded-2xl shadow-sm border border-border/60 bg-accent/20">
             <CardHeader>
               <div className="flex items-center gap-3">
-                <AlertCircle className="w-6 h-6 text-amber-600" />
+                <AlertCircle className="w-6 h-6 text-primary" />
                 <div>
                   <CardTitle className="text-lg">Top Fugas Detectadas</CardTitle>
                   <CardDescription>
@@ -1580,11 +1578,11 @@ export default function App() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Total micro-gastos:</span>
-                  <span className="text-lg font-bold text-amber-900">
+                  <span className="text-lg font-bold text-foreground">
                     {formatCurrency(microSpendingStats.total, currency)}
                   </span>
                 </div>
-                <div className="border-t border-amber-200 pt-3">
+                <div className="border-t border-border/60 pt-3">
                   <div className="text-xs font-medium text-neutral-600 mb-2">Top categorías:</div>
                   {microSpendingStats.topCategories.map(([category, data]: any) => (
                     <div key={category} className="flex justify-between text-sm py-1">
@@ -1604,10 +1602,10 @@ export default function App() {
       {/* Calendario de Próximos Vencimientos */}
       {upcomingPayments.length > 0 && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border-neutral-200 bg-gradient-to-br from-purple-50 to-white">
+          <Card className="rounded-2xl shadow-sm border-border/60 bg-card">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-purple-600" />
+                <Bell className="w-5 h-5 text-primary" />
                 <CardTitle className="text-lg">Próximos 7 Días</CardTitle>
               </div>
               <CardDescription>
@@ -1619,11 +1617,11 @@ export default function App() {
                 {upcomingPayments.map(payment => (
                   <div 
                     key={payment.id} 
-                    className="flex items-center justify-between p-3 bg-white rounded-lg border border-neutral-200"
+                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border/60"
                   >
                     <div className="flex items-center gap-3">
-                      {payment.type === 'subscription' && <Repeat className="w-4 h-4 text-purple-600" />}
-                      {payment.type === 'card-close' && <CreditCard className="w-4 h-4 text-blue-600" />}
+                      {payment.type === 'subscription' && <Repeat className="w-4 h-4 text-primary" />}
+                      {payment.type === 'card-close' && <CreditCard className="w-4 h-4 text-primary" />}
                       {payment.type === 'card-due' && <Clock className="w-4 h-4 text-rose-600" />}
                       {payment.type === 'other' && <Bell className="w-4 h-4 text-neutral-600" />}
                       <div>
@@ -1652,11 +1650,11 @@ export default function App() {
       {/* Suscripciones Detectadas */}
       {subscriptions.length > 0 && (
         <div className="max-w-[1440px] mx-auto mb-8">
-          <Card className="rounded-2xl shadow-sm border-neutral-200">
+          <Card className="rounded-2xl shadow-sm border-border/60">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Repeat className="w-5 h-5 text-indigo-600" />
+                  <Repeat className="w-5 h-5 text-primary" />
                   <CardTitle className="text-lg">Suscripciones Detectadas</CardTitle>
                 </div>
                 <div className="text-sm text-neutral-600">
@@ -1677,8 +1675,8 @@ export default function App() {
                     key={sub.id} 
                     className={`flex items-center justify-between p-4 rounded-lg border ${
                       sub.status === 'active' 
-                        ? 'bg-white border-neutral-200' 
-                        : 'bg-neutral-50 border-neutral-300 opacity-60'
+                        ? 'bg-card border-border/60' 
+                        : 'bg-muted border-border/60 opacity-60'
                     }`}
                   >
                     <div className="flex-1">
@@ -1748,11 +1746,11 @@ export default function App() {
 
       {/* Plan del Mes */}
       <div className="max-w-[1440px] mx-auto mb-8">
-        <Card className="rounded-2xl shadow-sm border-neutral-200 bg-gradient-to-br from-blue-50 to-white">
+        <Card className="rounded-2xl shadow-sm border-border/60 bg-card">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-blue-600" />
+                <Target className="w-5 h-5 text-primary" />
                 <CardTitle className="text-lg">Plan del Mes</CardTitle>
               </div>
               <Button
@@ -1771,12 +1769,12 @@ export default function App() {
                 {/* Meta de ahorro */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
-                    <PiggyBank className="w-4 h-4 text-violet-600" />
+                    <PiggyBank className="w-4 h-4 text-primary" />
                     Meta de ahorro
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-semibold text-violet-700">
+                      <span className="text-2xl font-semibold text-primary">
                         {formatCurrency(monthStats.savings, currency)}
                       </span>
                       <span className="text-sm text-neutral-500">
@@ -1825,7 +1823,7 @@ export default function App() {
                           .reduce((sum, t) => sum + t.amount, 0) / currentGoal.variableSpendingLimit) * 100, 100)} 
                         className="h-2"
                       />
-                      <div className="text-xs text-emerald-600 font-medium">
+                        <div className="text-xs text-primary font-medium">
                         Quedan {formatCurrency(Math.max(0, currentGoal.variableSpendingLimit - monthTransactions
                           .filter(t => {
                             const cat = categories.find(c => c.name === t.category);
@@ -1888,12 +1886,11 @@ export default function App() {
       <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* LEFT COLUMN */}
         <div className="space-y-8">
-          {/* Dashboard Card - Apple Style */}
-          <Card className="glass-card rounded-3xl shadow-2xl shadow-black/5 border-border/50 backdrop-blur-xl">
+          <Card className="glass-card rounded-3xl shadow-xl shadow-black/5 border-border/50 backdrop-blur-xl">
             <CardHeader className="pb-6">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-                  <BarChartIcon className="w-6 h-6 text-white" />
+                <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center">
+                  <BarChartIcon className="w-6 h-6 text-primary-foreground" />
                 </div>
                 <div>
                   <CardTitle className="text-2xl tracking-tight">Resumen del Mes</CardTitle>
@@ -1948,12 +1945,12 @@ export default function App() {
                 
                 <div className="space-y-2 p-4 glass rounded-2xl border border-border/30">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                    <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                      <PiggyBank className="w-4 h-4 text-purple-500" />
+                    <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+                      <PiggyBank className="w-4 h-4 text-primary" />
                     </div>
                     Ahorro
                   </div>
-                  <div className="text-xl font-bold text-purple-500 tracking-tight">
+                  <div className="text-xl font-bold text-primary tracking-tight">
                     {formatCurrency(monthStats.savings, currency)}
                   </div>
                 </div>
@@ -1978,17 +1975,17 @@ export default function App() {
 
               {/* Queda para gastar */}
               {currentGoal && dailyAllowance.perDay > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="bg-accent/25 border border-border/60 rounded-xl p-4">
                   <div className="flex items-start gap-3">
-                    <Wallet className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <Wallet className="w-5 h-5 text-primary mt-0.5" />
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-blue-900 mb-1">
+                      <div className="text-sm font-medium text-foreground mb-1">
                         Disponible para gastar
                       </div>
-                      <div className="text-2xl font-semibold text-blue-700 mb-1">
+                      <div className="text-2xl font-semibold text-primary mb-1">
                         {formatCurrency(dailyAllowance.perDay, currency)}/día
                       </div>
-                      <div className="text-xs text-blue-600">
+                      <div className="text-xs text-muted-foreground">
                         {dailyAllowance.daysRemaining} días restantes del mes • {formatCurrency(dailyAllowance.available, currency)} total disponible
                       </div>
                     </div>
@@ -2000,13 +1997,13 @@ export default function App() {
               {monthInsights.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium text-neutral-700">
-                    <Zap className="w-4 h-4 text-amber-500" />
+                    <Zap className="w-4 h-4 text-primary" />
                     Análisis rápido
                   </div>
                   <div className="space-y-2">
                     {monthInsights.map((insight, idx) => (
-                      <div key={idx} className="flex items-start gap-2 text-sm text-neutral-600 bg-neutral-50 rounded-lg p-3">
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
+                      <div key={idx} className="flex items-start gap-2 text-sm text-muted-foreground bg-muted/70 rounded-lg p-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
                         <span>{insight}</span>
                       </div>
                     ))}

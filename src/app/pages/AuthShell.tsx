@@ -20,9 +20,14 @@ export function AuthShell({
 }: AuthShellProps) {
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-4">
+        <div className="rounded-[2rem] bg-primary text-primary-foreground px-6 py-7 text-center">
+          <img src="/track-save-logo.svg" alt="track&save" className="mx-auto h-8 w-auto dark:hidden" />
+          <img src="/track-save-logo-negative.svg" alt="track&save" className="mx-auto hidden h-8 w-auto dark:block" />
+        </div>
+        <Card className="w-full border-border/70 shadow-none">
         <CardHeader>
-          <CardTitle>{title}</CardTitle>
+          <CardTitle className="text-2xl font-extrabold tracking-tight">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -36,7 +41,8 @@ export function AuthShell({
             </p>
           ) : null}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
